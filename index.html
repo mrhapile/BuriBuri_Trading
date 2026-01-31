@@ -17,24 +17,71 @@
          HEADER
          ======================================== -->
   <header class="header">
-    <div class="header-content">
-      <h1 class="logo">🐻 BuriBuri Trading</h1>
-      <p class="tagline">Explainable, Risk-Aware Portfolio Decisions</p>
-    </div>
-    <div class="header-actions">
-      <div class="scenario-controls">
-        <input type="text" id="symbol-input" class="symbol-input" placeholder="Symbol (e.g. NVDA)" value="NVDA">
-        <select id="scenario-selector" class="scenario-selector">
-          <option value="NORMAL">Normal Operation</option>
-          <option value="crash_reflex">🚨 The Crash Reflex</option>
-          <option value="concentration_guard">🛡️ The Concentration Guard</option>
-          <option value="disciplined_observer">👀 The Disciplined Observer</option>
-          <option value="dead_capital">♻️ The Dead Capital Rotator</option>
-          <option value="greedy_trap">🪤 The Greedy Trap</option>
-        </select>
+    <div class="header-top">
+      <div class="header-content">
+        <h1 class="logo">🐻 BuriBuri Trading</h1>
+        <p class="tagline">Explainable, Risk-Aware Portfolio Decisions</p>
       </div>
-      <span class="status-badge" id="status-badge">Ready</span>
-      <button class="btn-run" id="run-btn">Run Analysis</button>
+      <div class="header-actions">
+        <span class="status-badge" id="status-badge">Ready</span>
+        <button class="btn-run" id="run-btn">Run Analysis</button>
+      </div>
+    </div>
+
+    <!-- New Transparency Bar -->
+    <div class="status-bar" id="system-status-bar">
+      <div class="status-item">
+        <span class="status-label">Market Status:</span>
+        <span class="status-value highlight" id="ui-market-status">DETECTING...</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Data Feed:</span>
+        <span class="status-value" id="ui-data-feed">—</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Source:</span>
+        <span class="status-value" id="ui-data-source">—</span>
+      </div>
+      <div class="status-item mode-description" id="ui-mode-desc">
+        Initializing data pipelines...
+      </div>
+    </div>
+
+    <!-- Controls Row -->
+    <div class="controls-bar">
+      <div class="control-group" id="historical-controls">
+        <div class="control-item">
+          <label for="symbol-selector" class="control-label">Company</label>
+          <select id="symbol-selector" class="control-select">
+            <option value="SPY">SPY (S&P 500)</option>
+            <option value="QQQ">QQQ (Nasdaq 100)</option>
+            <option value="IWM">IWM (Russell 2000)</option>
+          </select>
+        </div>
+        <div class="control-item">
+          <label for="range-selector" class="control-label">Historical Range</label>
+          <select id="range-selector" class="control-select">
+            <option value="1M">1 Month</option>
+            <option value="4M">4 Months</option>
+            <option value="6M" selected>6 Months</option>
+            <option value="1Y">1 Year</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-item">
+          <label for="scenario-selector" class="control-label">Validation Scenario</label>
+          <select id="scenario-selector" class="control-select">
+            <option value="NORMAL">Normal Operation</option>
+            <option value="crash_reflex">🚨 The Crash Reflex</option>
+            <option value="concentration_guard">🛡️ The Concentration Guard</option>
+            <option value="disciplined_observer">👀 The Disciplined Observer</option>
+            <option value="dead_capital">♻️ The Dead Capital Rotator</option>
+            <option value="greedy_trap">🪤 The Greedy Trap</option>
+          </select>
+        </div>
+      </div>
     </div>
   </header>
 

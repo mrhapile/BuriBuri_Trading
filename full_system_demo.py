@@ -42,60 +42,19 @@ if HISTORICAL_VALIDATION and HISTORICAL_VALIDATION.lower() == "true":
     sys.exit(0)
 
 # 1. Detect Environment State
-AUTO_CONTEXT = market_mode.determine_execution_context()
+EXECUTION_CONTEXT = market_mode.determine_execution_context()
 
-# 2. Process User Overrides
-USER_DEMO_REQ = os.environ.get("DEMO_MODE")
-USER_ALPACA_REQ = os.environ.get("USE_ALPACA")
+# 2. Extract specific mode flags for internal logic
+IS_LIVE = (EXECUTION_CONTEXT["data_feed_mode"] == "LIVE")
+IS_HISTORICAL = (EXECUTION_CONTEXT["data_feed_mode"] == "HISTORICAL")
 
-if USER_DEMO_REQ is not None:
-    # Explicit User Request
-    DEMO_MODE = (USER_DEMO_REQ.lower() == "true")
-    if not DEMO_MODE:
-        if USER_ALPACA_REQ is not None:
-             USE_ALPACA = (USER_ALPACA_REQ.lower() == "true")
-        else:
-            # User said "No Demo", but didn't specify source. Fallback to Auto.
-            USE_ALPACA = (AUTO_CONTEXT["data_feed_mode"] == "LIVE")
-    else:
-        USE_ALPACA = False
-elif USER_ALPACA_REQ is not None:
-    # User explicitly set USE_ALPACA but didn't specify DEMO_MODE
-    # Assume they want to run what they asked for
-    DEMO_MODE = False
-    USE_ALPACA = (USER_ALPACA_REQ.lower() == "true")
-else:
-    # No explicit user request.
-    # If we have Live capabilities, USE THEM. Otherwise default to the Judge-Ready Profiles.
-    if AUTO_CONTEXT["data_feed_mode"] == "LIVE":
-        DEMO_MODE = False
-        USE_ALPACA = True
-    else:
-        DEMO_MODE = True # Default to profiles for best demo experience
-        USE_ALPACA = False
+# Symbols and time ranges for historical validation
+SUPPORTED_HISTORICAL_SYMBOLS = ["SPY", "QQQ", "IWM"]
+SUPPORTED_TIME_RANGES = ["1M", "4M", "6M", "1Y"]
 
-DEMO_PROFILE = os.environ.get("DEMO_PROFILE", "OVERCONCENTRATED_TECH")
-DEMO_TREND = os.environ.get("DEMO_TREND", "NEUTRAL").upper()
-
-# Final Context Construction
-EXECUTION_CONTEXT = AUTO_CONTEXT.copy()
-
-# Override context based on final mode decision
-if DEMO_MODE:
-    EXECUTION_CONTEXT["system_mode"] = "DEMO (Profiles)"
-    EXECUTION_CONTEXT["data_feed_mode"] = "SYNTHETIC (Profiles)"
-    EXECUTION_CONTEXT["data_capability"] = "Hardcoded Judge Profiles"
-elif USE_ALPACA:
-    EXECUTION_CONTEXT["system_mode"] = "PAPER (Advisory)"
-    # data_feed_mode stays as determined by market_mode (LIVE or SYNTHETIC) or updated by adapter
-    if EXECUTION_CONTEXT["data_feed_mode"] == "SYNTHETIC":
-        EXECUTION_CONTEXT["data_capability"] = "Alpaca + Polygon (Failover Active)"
-    else:
-         EXECUTION_CONTEXT["data_capability"] = "Alpaca + Polygon"
-else:
-    EXECUTION_CONTEXT["system_mode"] = "MOCK (Dev)"
-    EXECUTION_CONTEXT["data_feed_mode"] = "SYNTHETIC (Mock)"
-    EXECUTION_CONTEXT["data_capability"] = "Synthetic Generator"
+# Active selection states (can be modified by frontend/API)
+ACTIVE_SYMBOL = os.environ.get("VAL_SYMBOL", "SPY")
+ACTIVE_RANGE = os.environ.get("VAL_RANGE", "6M")
 
 
 # =============================================================================
@@ -132,62 +91,19 @@ def print_run_configuration():
 # =============================================================================
 
 _adapter = None
-_demo_data = None
-_trend_overlay = None
+_hist_manager = None
 
-if DEMO_MODE:
-    from demo.demo_profiles import (
-        load_demo_profile, 
-        get_demo_candidates, 
-        get_demo_heatmap,
-        get_profile_description,
-        get_available_profiles
-    )
-    from demo.trend_overlays import (
-        get_overlay,
-        get_overlay_description,
-        apply_overlay_to_volatility,
-        apply_overlay_to_confidence,
-        apply_overlay_to_news,
-        apply_overlay_to_heatmap,
-        get_available_overlays
-    )
-    
+if IS_LIVE:
     try:
-        _portfolio, _positions = load_demo_profile(DEMO_PROFILE)
-        _heatmap = get_demo_heatmap(DEMO_PROFILE)
-        
-        # Apply trend overlay to heatmap if specified
-        if DEMO_TREND != "NEUTRAL":
-            _heatmap = apply_overlay_to_heatmap(_heatmap, DEMO_TREND)
-            _trend_overlay = get_overlay(DEMO_TREND)
-        
-        _demo_data = {
-            "portfolio": _portfolio,
-            "positions": _positions,
-            "candidates": get_demo_candidates(DEMO_PROFILE),
-            "heatmap": _heatmap
-        }
-    except ValueError as e:
-        print(f"❌ Error loading profile: {e}")
-        print(f"   Falling back to mock mode...")
-        DEMO_MODE = False
-
-if not DEMO_MODE:
-    if USE_ALPACA:
-        try:
-            from broker.alpaca_adapter import AlpacaAdapter
-            _adapter = AlpacaAdapter()
-        except Exception as e:
-            print(f"❌ Alpaca Connection Failed: {e}")
-            print("   Falling back to Mock Adapter.")
-            from broker.mock_adapter import MockAdapter
-            _adapter = MockAdapter()
-            EXECUTION_CONTEXT["data_feed_mode"] = "SYNTHETIC (Fallback)"
-            EXECUTION_CONTEXT["data_capability"] = "Mock Adapter (Fallback)"
-    else:
-        from broker.mock_adapter import MockAdapter
-        _adapter = MockAdapter()
+        from broker.alpaca_adapter import AlpacaAdapter
+        _adapter = AlpacaAdapter()
+    except Exception as e:
+        print(f"❌ Alpaca Connection Failed in LIVE mode: {e}")
+        # In strict mode, we don't fallback to dummy if it's supposed to be live.
+        # But for stability in this dev environment, we'll log it.
+elif IS_HISTORICAL:
+    from validation.data_manager import HistoricalDataManager
+    _hist_manager = HistoricalDataManager()
 
 
 # =============================================================================
@@ -195,184 +111,140 @@ if not DEMO_MODE:
 # =============================================================================
 
 def get_portfolio_context():
-    """Returns portfolio state from configured data source."""
-    if DEMO_MODE and _demo_data:
-        return _demo_data["portfolio"]
-    return _adapter.get_portfolio()
+    """Returns portfolio state. Live from Alpaca, Fixed for Historical Validation."""
+    if IS_LIVE and _adapter:
+        return _adapter.get_portfolio()
+    
+    # Historical / Closed Market baseline
+    return {
+        "total_capital": 100000.0,
+        "cash": 100000.0,
+        "risk_tolerance": "moderate"
+    }
 
 
 def get_positions():
-    """Returns positions from configured data source."""
-    if DEMO_MODE and _demo_data:
-        return _demo_data["positions"]
-    return _adapter.get_positions()
+    """Returns positions. Live from Alpaca, Empty for Historical Validation."""
+    if IS_LIVE and _adapter:
+        return _adapter.get_positions()
+    return []
 
 
-def get_candidates():
-    """Returns trade candidates."""
-    if DEMO_MODE and _demo_data:
-        return _demo_data["candidates"]
+def get_candidates(symbol=None):
+    """Returns trade candidates. Live from Alpaca, Fixed for Historical."""
+    if IS_LIVE and _adapter:
+        return _adapter.get_candidates()
     
-    candidates = _adapter.get_candidates()
-    if not candidates:
-        return [
-            {"symbol": "NEW_BIO", "sector": "BIOTECH", "projected_efficiency": 85.0},
-            {"symbol": "MORE_TECH", "sector": "TECH", "projected_efficiency": 95.0}
-        ]
-    return candidates
+    # Historical validation typically tests specific candidates
+    target = symbol or ACTIVE_SYMBOL
+    return [
+        {"symbol": target, "sector": "TECH", "projected_efficiency": 85.0}
+    ]
 
 
 def get_sector_heatmap():
     """Returns sector heat scores."""
-    if DEMO_MODE and _demo_data:
-        return _demo_data["heatmap"]
-    return _adapter.get_sector_heatmap()
+    if IS_LIVE and _adapter:
+        return _adapter.get_sector_heatmap()
+    return {"TECH": 60, "SPY": 50}
 
 
-def get_market_data():
-    """Returns candles and news headlines."""
-    if DEMO_MODE:
-        candles = [
-            {"timestamp": f"2026-01-31T10:{i:02d}:00Z", "high": 100+i, "low": 98+i, "close": 99+i}
-            for i in range(20)
-        ]
-        headlines = [
-            "Tech sector shows resilience despite rate hike fears",
-            "AI demand continues to outpace supply in hardware markets",
-            "Market volatility expected to stabilize next quarter"
-        ]
+def get_market_data(symbol=None, time_range=None):
+    """
+    Returns candles and news headlines.
+    Strictly follows Data Feed Mode.
+    """
+    target_sym = symbol or ACTIVE_SYMBOL
+    target_range = time_range or ACTIVE_RANGE
+    
+    if IS_LIVE and _adapter:
+        candles = _adapter.get_recent_candles(target_sym, 20)
+        headlines = _adapter.get_headlines()
         return candles, headlines
     
-    candles = _adapter.get_recent_candles("SPY", 20)
+    if IS_HISTORICAL and _hist_manager:
+        # Map time range to dates
+        end_dt = "2023-06-01" # Fixed end for the cached data
+        if target_range == "1M": start_dt = "2023-05-01"
+        elif target_range == "4M": start_dt = "2023-02-01"
+        elif target_range == "1Y": start_dt = "2022-06-01" # Might fetch if missing
+        else: start_dt = "2023-01-01" # Default 6M approx
+            
+        candles = _hist_manager.fetch_history(target_sym, start_dt, end_dt)
+        # News is empty for historical validation as we don't have a news archive
+        return candles, []
     
-    if not candles:
-        # Fallback candles ensure system never crashes on empty data
-        candles = [
-            {"timestamp": f"2026-01-31T10:{i:02d}:00Z", "high": 100+i, "low": 98+i, "close": 99+i}
-            for i in range(20)
-        ]
-    
-    headlines = _adapter.get_headlines()
-    if not headlines:
-        headlines = [
-            "Tech sector shows resilience despite rate hike fears",
-            "AI demand continues to outpace supply in hardware markets",
-            "Utility sector stagnates as bond yields rise"
-        ]
-    
-    return candles, headlines
+    return [], []
 
 
 # =============================================================================
 # API-COMPATIBLE OUTPUT FUNCTION (NO PRINTING)
 # =============================================================================
 
-def run_demo_scenario(scenario_id=None, symbol=None):
+def run_demo_scenario(scenario_id=None, symbol=None, time_range=None):
     """
     Returns full system output as JSON-safe dict.
-    NO printing. NO side effects.
+    Strictly routed by market status (IS_LIVE / IS_HISTORICAL).
     """
-    # 1. Market Status
-    status = market_status.get_market_status()
-    is_open = status["is_open"]
-    data_mode = "MOCK"
-    portfolio_source = "MOCK"
+    # 1. Market Status & Mode
+    # Use global execution context as source of truth
+    status = market_mode.get_market_status()
+    is_open = (status["status"] == "OPEN")
     
-    # 2. default/Fallback Data
-    portfolio = {
-        "total_capital": 1_000_000.0,
-        "cash": 150_000.0,
-        "risk_tolerance": "moderate"
-    }
+    data_mode = EXECUTION_CONTEXT["data_feed_mode"]
+    portfolio_source = EXECUTION_CONTEXT["data_capability"]
     
-    positions = [
-        {"symbol": "NVDA", "sector": "TECH", "entry_price": 400.0, "current_price": 480.0, "atr": 12.0, "days_held": 12, "capital_allocated": 300_000.0},
-        {"symbol": "SLOW_UTIL", "sector": "UTILITIES", "entry_price": 50.0, "current_price": 51.0, "atr": 1.0, "days_held": 42, "capital_allocated": 200_000.0},
-        {"symbol": "SPEC_TECH", "sector": "TECH", "entry_price": 120.0, "current_price": 95.0, "atr": 5.0, "days_held": 8, "capital_allocated": 180_000.0}
-    ]
-    
-    sector_heatmap = {"TECH": 80, "UTILITIES": 40, "BIOTECH": 70}
-    candidates = [
-        {"symbol": "NEW_BIO", "sector": "BIOTECH", "projected_efficiency": 72.0},
-        {"symbol": "MORE_TECH", "sector": "TECH", "projected_efficiency": 68.0}
-    ]
-    
-    candles = [{"timestamp": f"2026-01-31T10:{i:02d}:00Z", "high": 100+i, "low": 98+i, "close": 99+i} for i in range(20)]
-    headlines = ["Tech sector sees steady demand growth"]
+    # Selected Symbol/Range (mostly for Historical validation)
+    target_sym = symbol or ACTIVE_SYMBOL
+    target_range = time_range or ACTIVE_RANGE
 
-    # 3. Data Strategy Switch
-    if not scenario_id and USE_ALPACA and _adapter:
-        if is_open:
-            # LIVE MODE
-            data_mode = "LIVE"
-            portfolio_source = "ALPACA"
-            try:
-                portfolio = _adapter.get_portfolio()
-                positions = _adapter.get_positions()
-                # candidates/heatmap defaults from adapter
-                target = symbol or "SPY"
-                candles = _adapter.get_recent_candles(target, limit=20, timeframe="1Min")
-                headlines = _adapter.get_headlines()
-            except Exception as e:
-                print(f"⚠️ Live Data Fetch Error: {e}")
-        else:
-            # HISTORICAL MODE
-            data_mode = "HISTORICAL"
-            portfolio_source = "HISTORICAL_SCENARIO"
-            # Keep synthetic positions, but fetch historical candles for analysis
-            target = symbol or "NVDA"
-            try:
-                fetched = _adapter.get_recent_candles(target, limit=20, timeframe="1Day")
-                if fetched:
-                    candles = fetched
-            except Exception as e:
-                print(f"⚠️ Historical Data Fetch Error: {e}")
+    # 2. Fetch Core Data (Depends on target_sym)
+    portfolio = get_portfolio_context()
+    positions = get_positions()
+    sector_heatmap = get_sector_heatmap()
+    candidates = get_candidates(target_sym)
+    
+    # 3. Fetch Market Data (Candles/News)
+    candles, headlines = get_market_data(target_sym, target_range)
 
     # =========================================================
-    # SCENARIO INJECTION: OVERRIDE MOCK INPUTS
+    # SCENARIO INJECTION (If scenario_id is provided)
     # =========================================================
     scenario = get_scenario(scenario_id) if scenario_id else {}
     overrides = scenario.get("override_inputs", {})
     
     if overrides:
-        data_mode = "SCENARIO"
+        # Scenarios force a specific data mode for display
+        data_mode = f"SCENARIO ({scenario_id})"
         if "positions" in overrides:
             positions = overrides["positions"]
         if "candidates" in overrides:
             candidates = overrides["candidates"]
-        # ... other overrides handled below ...
-
+            
     # =========================================================
-    # COMPUTE DEFAULT SIGNALS (FROM DATA)
+    # COMPUTE SIGNALS
     # =========================================================
-    # We compute these so we have values for Normal Mode (Live/Historical)
-    # If Scenarios are active, these will be overwritten.
+    # Always compute from the fetched data to ensure consistency
     
     # Volatility
     atr_res = volatility_metrics.compute_atr(candles)
-    # Use a dynamic baseline if possible, else fixed for demo stability
+    # Use 2.5 as demo baseline for stability
     baseline_atr = 2.5 
     if atr_res["atr"]:
         vol_res = volatility_metrics.classify_volatility_state(atr_res["atr"], baseline_atr)
-        default_vol_state = vol_res["volatility_state"]
+        vol_state = vol_res["volatility_state"]
     else:
-        default_vol_state = "STABLE"
+        vol_state = "STABLE"
         
     # News
     news_res = news_scorer.score_tech_news(headlines)
-    default_news_score = news_res["news_score"]
+    news_score_val = news_res["news_score"]
     
     # Confidence
-    conf_res = sector_confidence.compute_sector_confidence(default_vol_state, default_news_score)
-    default_confidence = conf_res["sector_confidence"]
+    conf_res = sector_confidence.compute_sector_confidence(vol_state, news_score_val)
+    confidence_val = conf_res["sector_confidence"]
 
-    # =========================================================
-    # APPLY OVERRIDES
-    # =========================================================
-    vol_state = default_vol_state
-    news_score_val = default_news_score
-    confidence_val = default_confidence
-    
+    # Apply overrides (if any)
     if "volatility_state" in overrides:
         vol_state = overrides["volatility_state"]
     if "news_score" in overrides:
@@ -385,13 +257,6 @@ def run_demo_scenario(scenario_id=None, symbol=None):
         "news": headlines
     }
     
-    if "volatility_state" in overrides:
-        market_context["override_volatility"] = overrides["volatility_state"]
-    if "news_score" in overrides:
-        market_context["override_news_score"] = overrides["news_score"]
-    if "sector_confidence" in overrides:
-        market_context["override_confidence"] = overrides["sector_confidence"]
-    
     # Run Decision Engine
     decision_report = decision_engine.run_decision_engine(
         portfolio_state=portfolio,
@@ -399,7 +264,7 @@ def run_demo_scenario(scenario_id=None, symbol=None):
         sector_heatmap=sector_heatmap,
         candidates=candidates,
         market_context=market_context,
-        execution_context=EXECUTION_CONTEXT # Pass context
+        execution_context=EXECUTION_CONTEXT
     )
     
     # Extract components
