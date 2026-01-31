@@ -125,3 +125,34 @@ Detects capital over-exposure to any single sector.
 - Fetches real-time market data (XLK - Technology Sector ETF)
 - Compares portfolio positions vs. market candidates
 - Identifies efficiency upgrade opportunities
+
+---
+
+## Phase 2 — Signal Layer (No Decisions Yet)
+
+This phase introduces market signals to assist in monitoring, but **no trading decisions are made in Phase 2.** All signals are descriptive and designed to provide context for future decision-making stages.
+
+### 1. ATR (Average True Range)
+
+ATR measures how much an asset's price typically moves in a given period. It is a pure volatility metric.
+
+- **Purpose**: Helps quantify "normal" movement vs. "abnormal" movement.
+- **Usage**: A higher ATR signals higher recent volatility. It is **not** a buy or sell signal.
+
+### 2. Volatility State
+
+Derived from ATR and price structure, this classifies the current market environment into simple states:
+
+- **LOW**: Calm market, standard risks apply.
+- **MODERATE**: Normalizing volatility, standard caution.
+- **HIGH**: Elevated uncertainty, higher risk awareness required.
+- **Status**: Used strictly for risk awareness, not for timing entries or exits.
+
+### 3. News Score
+
+A high-level numeric representation (0–100) of news sentiment for a specific sector.
+
+- **50**: Neutral (no significant news or mixed signals).
+- **>50**: Positive sentiment (growth, demand, upgrades).
+- **<50**: Negative sentiment (slowdown, risks, warnings).
+- **Status**: Descriptive only. A low score does **not** trigger an automatic exit, and a high score does **not** trigger an automatic entry.
