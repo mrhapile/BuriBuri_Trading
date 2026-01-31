@@ -4,9 +4,10 @@ full_system_demo.py
 End-to-End Demonstration of the Portfolio Intelligence System.
 Validates the complete pipeline: Signals -> Decisions -> Safety -> Planning.
 
-Data Source:
-    - USE_ALPACA = False (default): Mock data for development/testing
-    - USE_ALPACA = True: Real Alpaca paper trading data
+Data Sources (Priority Order):
+    1. DEMO_MODE = True: Pre-built demo profiles for showcasing intelligence
+    2. USE_ALPACA = True: Real Alpaca paper trading data
+    3. Default: Mock data for development/testing
 
 No real funds. No live trading. Pure logic validation.
 """
@@ -25,39 +26,85 @@ import execution_summary
 # DATA SOURCE CONFIGURATION
 # =============================================================================
 
-# Feature flag: Set to True to use real Alpaca paper trading data
-# Can also be set via environment variable: USE_ALPACA=true
+# DEMO MODE: Use pre-built demo profiles for showcasing (takes priority)
+# Set to True for hackathon demos / judge presentations
+DEMO_MODE = os.environ.get("DEMO_MODE", "true").lower() == "true"
+DEMO_PROFILE = os.environ.get("DEMO_PROFILE", "OVERCONCENTRATED_TECH")
+
+# ALPACA MODE: Use real paper trading data (when DEMO_MODE is False)
 USE_ALPACA = os.environ.get("USE_ALPACA", "false").lower() == "true"
 
-# Initialize data adapter based on feature flag
-if USE_ALPACA:
-    print("[Config] Data Source: ALPACA (Paper Trading)")
-    from broker.alpaca_adapter import AlpacaAdapter
-    _adapter = AlpacaAdapter()
-else:
-    print("[Config] Data Source: MOCK (Development)")
-    from broker.mock_adapter import MockAdapter
-    _adapter = MockAdapter()
+# =============================================================================
+# INITIALIZE DATA SOURCE
+# =============================================================================
+
+_adapter = None
+_demo_data = None
+
+if DEMO_MODE:
+    # DEMO MODE: Load pre-built portfolio profiles
+    print("=" * 60)
+    print("🎯 [DEMO MODE ENABLED]")
+    from demo.demo_profiles import (
+        load_demo_profile, 
+        get_demo_candidates, 
+        get_demo_heatmap,
+        get_profile_description,
+        get_available_profiles
+    )
+    
+    try:
+        _portfolio, _positions = load_demo_profile(DEMO_PROFILE)
+        _demo_data = {
+            "portfolio": _portfolio,
+            "positions": _positions,
+            "candidates": get_demo_candidates(DEMO_PROFILE),
+            "heatmap": get_demo_heatmap(DEMO_PROFILE)
+        }
+        print(f"   Profile: {DEMO_PROFILE}")
+        print(f"   Description: {get_profile_description(DEMO_PROFILE)}")
+        print(f"   Available Profiles: {', '.join(get_available_profiles())}")
+    except ValueError as e:
+        print(f"   ❌ Error: {e}")
+        print(f"   Falling back to mock mode...")
+        DEMO_MODE = False
+    print("=" * 60)
+
+if not DEMO_MODE:
+    if USE_ALPACA:
+        print("[Config] Data Source: ALPACA (Paper Trading)")
+        from broker.alpaca_adapter import AlpacaAdapter
+        _adapter = AlpacaAdapter()
+    else:
+        print("[Config] Data Source: MOCK (Development)")
+        from broker.mock_adapter import MockAdapter
+        _adapter = MockAdapter()
 
 
 # =============================================================================
-# DATA ACCESS LAYER (Uses Adapter)
+# DATA ACCESS LAYER
 # =============================================================================
 
 def get_portfolio_context():
     """Returns portfolio state from configured data source."""
+    if DEMO_MODE and _demo_data:
+        return _demo_data["portfolio"]
     return _adapter.get_portfolio()
 
 
 def get_positions():
     """Returns positions from configured data source."""
+    if DEMO_MODE and _demo_data:
+        return _demo_data["positions"]
     return _adapter.get_positions()
 
 
 def get_candidates():
     """Returns trade candidates."""
+    if DEMO_MODE and _demo_data:
+        return _demo_data["candidates"]
+    
     candidates = _adapter.get_candidates()
-    # If Alpaca returns empty, use defaults
     if not candidates:
         return [
             {"symbol": "NEW_BIO", "sector": "BIOTECH", "projected_efficiency": 85.0},
@@ -68,22 +115,35 @@ def get_candidates():
 
 def get_sector_heatmap():
     """Returns sector heat scores."""
+    if DEMO_MODE and _demo_data:
+        return _demo_data["heatmap"]
     return _adapter.get_sector_heatmap()
 
 
 def get_market_data():
     """Returns candles and news headlines."""
+    if DEMO_MODE:
+        # Generate realistic mock candles for demo
+        candles = [
+            {"timestamp": f"2026-01-31T10:{i:02d}:00Z", "high": 100+i, "low": 98+i, "close": 99+i}
+            for i in range(20)
+        ]
+        headlines = [
+            "Tech sector shows resilience despite rate hike fears",
+            "AI demand continues to outpace supply in hardware markets",
+            "Market volatility expected to stabilize next quarter"
+        ]
+        return candles, headlines
+    
     # Get candles from adapter
     candles = _adapter.get_recent_candles("SPY", 20)
     
-    # If no candles, generate mock
     if not candles:
         candles = [
             {"timestamp": f"2026-01-31T10:{i:02d}:00Z", "high": 100+i, "low": 98+i, "close": 99+i}
             for i in range(20)
         ]
     
-    # Get headlines (may be empty from Alpaca)
     headlines = _adapter.get_headlines()
     if not headlines:
         headlines = [
@@ -244,24 +304,26 @@ def run_demo_scenario():
 # =============================================================================
 
 def run_full_system_demo():
-    print("================================================================")
-    print("PORTFOLIO INTELLIGENCE SYSTEM - END-TO-END DEMO")
-    print("================================================================")
+    print("\n" + "=" * 70)
+    print("🧠 PORTFOLIO INTELLIGENCE SYSTEM - END-TO-END DEMO")
+    print("=" * 70)
+    
+    if DEMO_MODE:
+        print(f"📊 Running with: {DEMO_PROFILE} profile")
     
     # ---------------------------------------------------------
     # 1. PHASE 2 - SIGNAL GENERATION
     # ---------------------------------------------------------
-    print("\n" + "="*50)
+    print("\n" + "=" * 60)
     print("=== PHASE 2: SIGNAL GENERATION ===")
-    print("="*50)
+    print("=" * 60)
     
     candles, headlines = get_market_data()
     
     # A. Volatility
     atr_res = volatility_metrics.compute_atr(candles)
-    # Use computed ATR for classification
     current_atr = atr_res.get("atr", 2.0)
-    baseline_atr = current_atr * 1.1  # Assume baseline slightly higher
+    baseline_atr = current_atr * 1.1
     vol_res = volatility_metrics.classify_volatility_state(current_atr=current_atr, baseline_atr=baseline_atr)
     vol_state = vol_res["volatility_state"]
     print(f"[Signal] Volatility State: {vol_state} (ATR: {current_atr:.2f})")
@@ -284,19 +346,36 @@ def run_full_system_demo():
     # ---------------------------------------------------------
     # 2. PHASE 3 - DECISION MAKING
     # ---------------------------------------------------------
-    print("\n" + "="*50)
+    print("\n" + "=" * 60)
     print("=== PHASE 3: DECISION MAKING ===")
-    print("="*50)
+    print("=" * 60)
     
     portfolio = get_portfolio_context()
     positions = get_positions()
     heatmap = get_sector_heatmap()
     candidates = get_candidates()
     
-    print(f"[Data] Portfolio: ${portfolio['total_capital']:,.0f} total, ${portfolio['cash']:,.0f} cash")
-    print(f"[Data] Positions: {len(positions)}")
+    print(f"\n📈 [Portfolio Overview]")
+    print(f"   Total Capital: ${portfolio['total_capital']:,.0f}")
+    print(f"   Cash Available: ${portfolio['cash']:,.0f} ({portfolio['cash']/portfolio['total_capital']*100:.1f}%)")
+    print(f"\n📊 [Positions: {len(positions)}]")
+    
+    # Calculate sector exposure
+    sector_exposure = {}
     for p in positions:
-        print(f"       - {p['symbol']}: ${p.get('capital_allocated', 0):,.0f}")
+        sector = p.get("sector", "OTHER")
+        sector_exposure[sector] = sector_exposure.get(sector, 0) + p["capital_allocated"]
+    
+    for p in positions:
+        pnl = ((p["current_price"] - p["entry_price"]) / p["entry_price"]) * 100
+        pnl_indicator = "🟢" if pnl > 0 else "🔴"
+        print(f"   {pnl_indicator} {p['symbol']:<6} | {p['sector']:<10} | ${p['capital_allocated']:>10,.0f} | {pnl:>+6.1f}%")
+    
+    print(f"\n🎯 [Sector Concentration]")
+    for sector, alloc in sorted(sector_exposure.items(), key=lambda x: -x[1]):
+        pct = (alloc / portfolio['total_capital']) * 100
+        warning = "⚠️ " if pct > 60 else "   "
+        print(f"   {warning}{sector}: {pct:.1f}%")
     
     # Run the Engine
     decision_report = decision_engine.run_decision_engine(
@@ -308,69 +387,111 @@ def run_full_system_demo():
     )
     
     posture = decision_report["market_posture"]
-    print(f"\n[Strategy] Market Posture: {posture['market_posture']} (Risk: {posture['risk_level']})")
-    print(f"[Strategy] Posture Reason: {posture['reasons'][0]}")
-    
-    print("\n[Strategy] Initial Decisions (Before Safety):")
+    print(f"\n🎮 [Strategy]")
+    print(f"   Market Posture: {posture['market_posture']} (Risk: {posture['risk_level']})")
+    for reason in posture.get('reasons', []):
+        print(f"   → {reason}")
+
+    # ---------------------------------------------------------
+    # 3. DECISIONS & EXPLANATIONS
+    # ---------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("=== PHASE 3: DECISIONS WITH EXPLANATIONS ===")
+    print("=" * 60)
     
     safe_decisions = decision_report.get("decisions", [])
     blocked_decisions = decision_report.get("blocked_by_safety", [])
     
-    all_decisions = safe_decisions + blocked_decisions
+    if safe_decisions:
+        print("\n✅ [Approved Actions]")
+        for d in safe_decisions:
+            action_color = "🟢" if d['action'] in ["MAINTAIN", "HOLD", "ALLOCATE"] else "🟡"
+            if d['action'] in ["REDUCE", "TRIM_RISK", "FREE_CAPITAL"]:
+                action_color = "🔴"
+            
+            print(f"\n   {action_color} {d['type']:<10} | {d['target']:<8} → {d['action']}")
+            print(f"      Score: {d.get('score', 'N/A')}")
+            
+            # Show explanations
+            reasons = d.get('reasons', [d.get('reason', 'No explanation')])
+            if isinstance(reasons, list):
+                for i, r in enumerate(reasons[:3], 1):
+                    print(f"      {i}. {r}")
+            else:
+                print(f"      → {reasons}")
+
+    # ---------------------------------------------------------
+    # 4. SAFETY & GUARDRAILS
+    # ---------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("=== PHASE 4: SAFETY GUARDRAILS ===")
+    print("=" * 60)
     
-    if not all_decisions:
-        print("  - No actions proposed.")
+    if not blocked_decisions:
+        print("\n   🛡️ All proposed actions passed safety checks")
     else:
-        for d in all_decisions:
-            print(f"  > {d['type']:<10} | {d['target']:<10} -> {d['action']}")
-            print(f"    Reason: {d['reason']}")
+        print(f"\n   🚨 [{len(blocked_decisions)} Actions BLOCKED by Safety Guards]")
+        for b in blocked_decisions:
+            print(f"\n   ❌ {b['type']:<10} | {b['target']:<8} → {b['action']}")
+            safety_reason = b.get('safety_reason', b.get('blocking_guard', 'Safety violation'))
+            print(f"      🛑 BLOCKED: {safety_reason}")
+            reasons = b.get('reasons', [])
+            if reasons:
+                print(f"      Would-be reasons:")
+                for i, r in enumerate(reasons[:2], 1):
+                    print(f"        {i}. {r}")
 
     # ---------------------------------------------------------
-    # 3. PHASE 4 - SAFETY & EXECUTION PLANNING
+    # 5. EXECUTION PLANNING
     # ---------------------------------------------------------
-    print("\n" + "="*50)
-    print("=== PHASE 4: SAFETY & EXECUTION PLANNING ===")
-    print("="*50)
-
+    print("\n" + "=" * 60)
+    print("=== PHASE 5: EXECUTION PLANNING ===")
+    print("=" * 60)
+    
     if safe_decisions:
         simulated_decision_input = {"decision": posture["market_posture"]}
         plan_output = execution_planner.generate_execution_plan(simulated_decision_input, positions)
         
-        print("\n[Plan] Execution Plan (Sequential):")
-        for step in plan_output.get("proposed_actions", []):
-            print(f"  - {step['symbol']}: {step['action']}")
-            print(f"    Reason: {step['reason']}")
+        print("\n📋 [Sequential Execution Plan]")
+        for i, step in enumerate(plan_output.get("proposed_actions", []), 1):
+            print(f"   {i}. {step['symbol']}: {step['action']}")
+            print(f"      → {step['reason']}")
     else:
         plan_output = {"proposed_actions": []}
-    
-    print("\n[Safety] Blocked Actions Report:")
-    if not blocked_decisions:
-        print("  - No actions were blocked by safety guards.")
-    else:
-        for b in blocked_decisions:
-            print(f"  X BLOCKED: {b['target']} ({b['action']})")
-            print(f"    Guard: {b.get('blocking_guard', b.get('safety_reason', 'Unknown'))}")
-            print(f"    Reason: {b.get('reason_blocked', b.get('reason', 'Safety violation'))}")
+        print("\n   No actions to plan.")
 
-    # Final Summary
-    print("\n" + "-"*60)
-    print("FINAL EXECUTION SUMMARY")
-    print("-" * 60)
+    # ---------------------------------------------------------
+    # FINAL SUMMARY
+    # ---------------------------------------------------------
+    print("\n" + "=" * 70)
+    print("📊 EXECUTIVE SUMMARY")
+    print("=" * 70)
     
     summary_context = {
         "primary_intent": posture["market_posture"],
-        "proposed_actions": plan_output.get("proposed_actions", []) if safe_decisions else [],
+        "proposed_actions": plan_output.get("proposed_actions", []),
         "blocked_actions": blocked_decisions,
         "mode": posture["risk_level"]
     }
     
     summary = execution_summary.generate_execution_summary(summary_context)
     
-    print(f"Decision:         {summary['decision']}")
-    print(f"Actions Proposed: {summary['actions_proposed']}")
-    print(f"Actions Blocked:  {summary['actions_blocked']}")
-    print(f"Final Mode:       {summary['final_mode']}")
-    print("================================================================")
+    print(f"""
+   Decision:          {summary['decision']}
+   Risk Level:        {summary['final_mode']}
+   Actions Approved:  {summary['actions_proposed']}
+   Actions Blocked:   {summary['actions_blocked']}
+    """)
+    
+    # Concentration warning
+    conc_risk = decision_report.get("concentration_risk", {})
+    if conc_risk.get("is_concentrated"):
+        print(f"   ⚠️  CONCENTRATION ALERT: {conc_risk['dominant_sector']} @ {conc_risk['exposure']:.0%}")
+    
+    print("=" * 70)
+    
+    if DEMO_MODE:
+        print(f"\n💡 Try other profiles: DEMO_PROFILE=BALANCED_TECH or DEMO_PROFILE=LOSING_PORTFOLIO")
 
 
 if __name__ == "__main__":
