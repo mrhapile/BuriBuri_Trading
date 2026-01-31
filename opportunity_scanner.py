@@ -1,3 +1,122 @@
+import os
+import requests
+import logging
+import datetime
+from typing import List, Dict, Any, Optional
+
+# Configure logging
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def fetch_tech_sector_candles(limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Fetches 15-minute OHLC candles for the Technology sector ETF (XLK)
+    using Polygon's Aggregates API.
+
+    This module is designed to be fail-safe and deterministic.
+    
+    Args:
+        limit (int): Approximate number of most recent candles to return.
+                     Defaults to 50.
+
+    Returns:
+        List[Dict[str, Any]]: List of dictionaries containing:
+            - open (float)
+            - high (float)
+            - low (float)
+            - close (float)
+            - timestamp (str: ISO-8601 UTC)
+            
+        Returns an empty list [] on any error or failure.
+        The list is sorted in ascending order (oldest -> newest).
+    """
+    api_key = os.environ.get("POLYGON_API_KEY")
+    if not api_key:
+        logger.error("POLYGON_API_KEY environment variable is not set.")
+        return []
+
+    ticker = "XLK"
+    multiplier = 15
+    timespan = "minute"
+    
+    # Calculate date range
+    # We request a generous buffer (last 5 days) to ensure we get enough 15-min candles
+    # even over weekends or holidays.
+    end_date = datetime.datetime.now(datetime.timezone.utc)
+    start_date = end_date - datetime.timedelta(days=5)
+
+    from_str = start_date.strftime("%Y-%m-%d")
+    to_str = end_date.strftime("%Y-%m-%d")
+
+    # Construct URL
+    # Polygon API Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
+    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from_str}/{to_str}"
+    
+    params = {
+        "adjusted": "true",
+        "sort": "asc",
+        "limit": 5000, # Request max allowed to ensure we capture the tail
+        "apiKey": api_key
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code != 200:
+            logger.error(f"Polygon API failed with status {response.status_code}: {response.text}")
+            return []
+            
+        data = response.json()
+        
+        # Defensive check for list results
+        results = data.get("results", [])
+        if not isinstance(results, list) or not results:
+            logger.warning(f"Polygon API returned no results for {ticker}")
+            return []
+
+        parsed_candles = []
+        for r in results:
+            # Defensive check for required fields
+            # 'o' = Open, 'h' = High, 'l' = Low, 'c' = Close, 't' = Timestamp (ms)
+            if not all(k in r for k in ("o", "h", "l", "c", "t")):
+                continue
+                
+            try:
+                # Convert timestamp (ms) to ISO UTC string
+                ts_ms = r["t"]
+                # Enforce float conversion for prices
+                candle = {
+                    "open": float(r["o"]),
+                    "high": float(r["h"]),
+                    "low": float(r["l"]),
+                    "close": float(r["c"]),
+                    "timestamp": datetime.datetime.fromtimestamp(
+                        ts_ms / 1000.0, tz=datetime.timezone.utc
+                    ).isoformat()
+                }
+                parsed_candles.append(candle)
+            except (ValueError, TypeError) as e:
+                # Skip individual malformed records but keep processing valid ones
+                logger.warning(f"Skipping malformed candle data: {r} - Error: {e}")
+                continue
+        
+        # Ensure sorting: Oldest -> Newest
+        parsed_candles.sort(key=lambda x: x["timestamp"])
+
+        # Return the most recent 'limit' candles
+        # If we have fewer than limit, return all we have
+        return parsed_candles[-limit:]
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error fetching Polygon data for {ticker}: {e}")
+        return []
+    except ValueError as e:
+        logger.error(f"JSON decoding failed for {ticker}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error in fetch_tech_sector_candles: {e}")
+        return []
+
 def scan_for_opportunities(positions: list, candidates: list, threshold: float = 15.0) -> dict:
     """
     Scans for relative efficiency opportunities by comparing the portfolio's 
@@ -99,25 +218,35 @@ def scan_for_opportunities(positions: list, candidates: list, threshold: float =
 # Usage Example
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    # 1. Current Positions (From Part A)
+    import json
+    
+    print("--- Opportunity Scanner Verification ---")
+    
+    # 1. Verify Sector Candle Fetching
+    print("\n[Test] Fetching XLK Candles...")
+    # NOTE: Set POLYGON_API_KEY env var to test this for real
+    candles = fetch_tech_sector_candles(limit=5)
+    
+    if candles:
+        print(f"Success: Fetched {len(candles)} candles.")
+        print("Last 2 candles:")
+        print(json.dumps(candles[-2:], indent=2))
+    else:
+        print("Result: [] (Expected if no API key or network error)")
+
+    # 2. Verify Logic (Existing Mock Data)
+    print("\n[Test] running Logic Scan...")
     current_portfolio = [
-        {"symbol": "LAGGING_CO", "vitals_score": 35.0}, # The Weakest Link
+        {"symbol": "LAGGING_CO", "vitals_score": 35.0}, 
         {"symbol": "STABLE_INC", "vitals_score": 60.0},
         {"symbol": "STAR_CORP", "vitals_score": 92.0}
     ]
     
-    # 2. External Candidates (Mocked Efficiency)
-    # Think of 'projected_efficiency' as a simulated Vitals Score for a potential trade
     market_candidates = [
-        {"symbol": "NEW_TECH", "projected_efficiency": 85.0}, # The Top Prospect
+        {"symbol": "NEW_TECH", "projected_efficiency": 85.0}, 
         {"symbol": "HOT_BIO", "projected_efficiency": 70.0},
         {"symbol": "DULL_UTIL", "projected_efficiency": 40.0}
     ]
     
-    # 3. Run Scan
-    # We require a 15 point improvement to consider it "better"
     report = scan_for_opportunities(current_portfolio, market_candidates, threshold=15.0)
-    
-    # 4. Print Results
-    import json
     print(json.dumps(report, indent=4))

@@ -39,3 +39,89 @@ These are starting points only. Teams are encouraged to expand, refine, or rethi
 2. Akash Anand - Tech lead
 3. Mohit Ray - UI/UX
 4. Dev Jaiswal - Reviewer/Tester
+
+---
+
+## 🚀 Setup Instructions
+
+### 1. Clone the Repository
+
+```bash
+git clone <your-repo-url>
+cd BuriBuri_Trading
+```
+
+### 2. Install Dependencies
+
+```bash
+pip3 install -r requirements.txt
+```
+
+### 3. Set API Key
+
+Get your free API key from: **<https://polygon.io/>**
+
+#### For Current Terminal Session
+
+```bash
+export POLYGON_API_KEY='your_api_key_here'
+```
+
+#### For Permanent Setup (Recommended)
+
+Add to your `~/.zshrc` file:
+
+```bash
+echo 'export POLYGON_API_KEY="your_api_key_here"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### 4. Test the API Integration
+
+```bash
+python3 opportunity_scanner.py
+```
+
+You should see:
+
+```
+Success! Fetched X candles
+```
+
+---
+
+## 🌐 Deployment (Heroku, Railway, Render, AWS, etc.)
+
+1. Push your code to GitHub
+2. In your hosting platform's dashboard, add environment variable:
+   - **Key**: `POLYGON_API_KEY`
+   - **Value**: `your_actual_api_key`
+3. Deploy
+
+The code reads from `os.environ.get("POLYGON_API_KEY")` automatically.
+
+---
+
+## 📦 Core Modules
+
+### 1. Vitals Monitor (`vitals_monitor.py`)
+
+Computes a **Vitals Score (0-100)** for each position based on:
+
+- Volatility-adjusted returns
+- Capital efficiency
+- Time decay penalty
+
+**Output**: Position health (HEALTHY / WEAK / UNHEALTHY)
+
+### 2. Concentration Guard (`concentration_guard.py`)
+
+Detects capital over-exposure to any single sector.
+
+**Output**: Sector exposure map + risk warnings (OK / APPROACHING / SOFT_BREACH)
+
+### 3. Opportunity Scanner (`opportunity_scanner.py`)
+
+- Fetches real-time market data (XLK - Technology Sector ETF)
+- Compares portfolio positions vs. market candidates
+- Identifies efficiency upgrade opportunities
