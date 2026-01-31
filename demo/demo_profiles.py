@@ -237,6 +237,138 @@ PROFILES = {
             {"symbol": "AMZN", "sector": "TECH", "projected_efficiency": 70.0},
             {"symbol": "WMT", "sector": "RETAIL", "projected_efficiency": 60.0}
         ]
+    },
+    
+    # -------------------------------------------------------------------------
+    # PROFILE 4: ROTATION_SCENARIO
+    # TECH weakening, ENERGY rising - forces capital reallocation
+    # Expected: FREE_CAPITAL from weak TECH, ALLOCATE to rising ENERGY
+    # -------------------------------------------------------------------------
+    "ROTATION_SCENARIO": {
+        "description": "Sector rotation: TECH cooling, ENERGY rising - forces reallocation",
+        "portfolio_state": {
+            "total_capital": 800_000.0,
+            "cash": 120_000.0,  # 15% available for rotation
+            "risk_tolerance": "moderate"
+        },
+        "positions": [
+            # TECH - weakening
+            {
+                "symbol": "NVDA",
+                "sector": "TECH",
+                "entry_price": 500.0,
+                "current_price": 480.0,  # -4% declining
+                "atr": 15.0,
+                "days_held": 60,
+                "capital_allocated": 200_000.0
+            },
+            {
+                "symbol": "META",
+                "sector": "TECH",
+                "entry_price": 400.0,
+                "current_price": 385.0,  # -3.75% declining
+                "atr": 12.0,
+                "days_held": 45,
+                "capital_allocated": 150_000.0
+            },
+            # ENERGY - rising strongly
+            {
+                "symbol": "XOM",
+                "sector": "ENERGY",
+                "entry_price": 100.0,
+                "current_price": 118.0,  # +18% gain
+                "atr": 3.0,
+                "days_held": 90,
+                "capital_allocated": 120_000.0
+            },
+            {
+                "symbol": "CVX",
+                "sector": "ENERGY",
+                "entry_price": 150.0,
+                "current_price": 172.0,  # +14.7% gain
+                "atr": 4.0,
+                "days_held": 75,
+                "capital_allocated": 110_000.0
+            },
+            # Steady FINANCE position
+            {
+                "symbol": "JPM",
+                "sector": "FINANCE",
+                "entry_price": 175.0,
+                "current_price": 185.0,  # +5.7% gain
+                "atr": 3.5,
+                "days_held": 120,
+                "capital_allocated": 100_000.0
+            }
+        ],
+        "sector_heatmap": {
+            "TECH": 45,      # Cooling down
+            "ENERGY": 90,    # HOT - rising
+            "FINANCE": 65,
+            "HEALTHCARE": 55
+        },
+        "candidates": [
+            {"symbol": "OXY", "sector": "ENERGY", "projected_efficiency": 88.0},  # Hot sector
+            {"symbol": "AAPL", "sector": "TECH", "projected_efficiency": 72.0},   # Cool sector
+            {"symbol": "SLB", "sector": "ENERGY", "projected_efficiency": 82.0}
+        ]
+    },
+    
+    # -------------------------------------------------------------------------
+    # PROFILE 5: CASH_HEAVY
+    # High idle cash, waiting for opportunities
+    # Expected: Shows "why we did NOT deploy capital" (waiting for signals)
+    # -------------------------------------------------------------------------
+    "CASH_HEAVY": {
+        "description": "High idle cash (40%) - demonstrates capital discipline",
+        "portfolio_state": {
+            "total_capital": 500_000.0,
+            "cash": 200_000.0,  # 40% cash - unusually high
+            "risk_tolerance": "conservative"
+        },
+        "positions": [
+            # Only 3 small, stable positions
+            {
+                "symbol": "AAPL",
+                "sector": "TECH",
+                "entry_price": 175.0,
+                "current_price": 180.0,  # +2.9% modest gain
+                "atr": 3.0,
+                "days_held": 180,
+                "capital_allocated": 100_000.0
+            },
+            {
+                "symbol": "JNJ",
+                "sector": "HEALTHCARE",
+                "entry_price": 158.0,
+                "current_price": 162.0,  # +2.5% modest gain
+                "atr": 2.0,
+                "days_held": 200,
+                "capital_allocated": 100_000.0
+            },
+            {
+                "symbol": "PG",
+                "sector": "CONSUMER",
+                "entry_price": 155.0,
+                "current_price": 160.0,  # +3.2% modest gain
+                "atr": 1.8,
+                "days_held": 150,
+                "capital_allocated": 100_000.0
+            }
+        ],
+        # All sectors mediocre - no compelling opportunities
+        "sector_heatmap": {
+            "TECH": 50,       # Neutral
+            "HEALTHCARE": 55,
+            "CONSUMER": 52,
+            "FINANCE": 48,
+            "ENERGY": 45
+        },
+        "candidates": [
+            {"symbol": "MSFT", "sector": "TECH", "projected_efficiency": 55.0},     # Mediocre
+            {"symbol": "BAC", "sector": "FINANCE", "projected_efficiency": 48.0},   # Below threshold
+            {"symbol": "XOM", "sector": "ENERGY", "projected_efficiency": 52.0}
+        ]
     }
 }
 

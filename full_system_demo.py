@@ -27,12 +27,52 @@ import execution_summary
 # =============================================================================
 
 # DEMO MODE: Use pre-built demo profiles for showcasing (takes priority)
-# Set to True for hackathon demos / judge presentations
 DEMO_MODE = os.environ.get("DEMO_MODE", "true").lower() == "true"
 DEMO_PROFILE = os.environ.get("DEMO_PROFILE", "OVERCONCENTRATED_TECH")
+DEMO_TREND = os.environ.get("DEMO_TREND", "NEUTRAL").upper()
 
 # ALPACA MODE: Use real paper trading data (when DEMO_MODE is False)
 USE_ALPACA = os.environ.get("USE_ALPACA", "false").lower() == "true"
+
+
+# =============================================================================
+# CAPABILITY DISCLOSURE (MANDATORY FOR JUDGES)
+# =============================================================================
+
+def print_run_configuration():
+    """Print clear, honest capability disclosure at startup."""
+    
+    # Determine actual data source
+    if DEMO_MODE:
+        mode_name = "DEMO"
+        portfolio_source = "HARD-CODED"
+        market_data = "SIMULATED"
+    elif USE_ALPACA:
+        mode_name = "ALPACA"
+        portfolio_source = "ALPACA PAPER API"
+        market_data = "REAL (with fallback)"
+    else:
+        mode_name = "MOCK"
+        portfolio_source = "MOCK DATA"
+        market_data = "SIMULATED"
+    
+    trend_info = DEMO_TREND if DEMO_MODE and DEMO_TREND != "NEUTRAL" else "NONE"
+    
+    print()
+    print("╔" + "═" * 58 + "╗")
+    print("║" + "RUN CONFIGURATION".center(58) + "║")
+    print("╠" + "═" * 58 + "╣")
+    print(f"║  Mode              : {mode_name:<35}║")
+    if DEMO_MODE:
+        print(f"║  Profile           : {DEMO_PROFILE:<35}║")
+    print(f"║  Portfolio Source  : {portfolio_source:<35}║")
+    print(f"║  Market Data       : {market_data:<35}║")
+    print(f"║  Trend Overlay     : {trend_info:<35}║")
+    print(f"║  Execution         : {'DISABLED':<35}║")
+    print(f"║  Safety Guards     : {'ENABLED':<35}║")
+    print("╚" + "═" * 58 + "╝")
+    print()
+
 
 # =============================================================================
 # INITIALIZE DATA SOURCE
@@ -40,11 +80,9 @@ USE_ALPACA = os.environ.get("USE_ALPACA", "false").lower() == "true"
 
 _adapter = None
 _demo_data = None
+_trend_overlay = None
 
 if DEMO_MODE:
-    # DEMO MODE: Load pre-built portfolio profiles
-    print("=" * 60)
-    print("🎯 [DEMO MODE ENABLED]")
     from demo.demo_profiles import (
         load_demo_profile, 
         get_demo_candidates, 
@@ -52,31 +90,41 @@ if DEMO_MODE:
         get_profile_description,
         get_available_profiles
     )
+    from demo.trend_overlays import (
+        get_overlay,
+        get_overlay_description,
+        apply_overlay_to_volatility,
+        apply_overlay_to_confidence,
+        apply_overlay_to_news,
+        apply_overlay_to_heatmap,
+        get_available_overlays
+    )
     
     try:
         _portfolio, _positions = load_demo_profile(DEMO_PROFILE)
+        _heatmap = get_demo_heatmap(DEMO_PROFILE)
+        
+        # Apply trend overlay to heatmap if specified
+        if DEMO_TREND != "NEUTRAL":
+            _heatmap = apply_overlay_to_heatmap(_heatmap, DEMO_TREND)
+            _trend_overlay = get_overlay(DEMO_TREND)
+        
         _demo_data = {
             "portfolio": _portfolio,
             "positions": _positions,
             "candidates": get_demo_candidates(DEMO_PROFILE),
-            "heatmap": get_demo_heatmap(DEMO_PROFILE)
+            "heatmap": _heatmap
         }
-        print(f"   Profile: {DEMO_PROFILE}")
-        print(f"   Description: {get_profile_description(DEMO_PROFILE)}")
-        print(f"   Available Profiles: {', '.join(get_available_profiles())}")
     except ValueError as e:
-        print(f"   ❌ Error: {e}")
+        print(f"❌ Error loading profile: {e}")
         print(f"   Falling back to mock mode...")
         DEMO_MODE = False
-    print("=" * 60)
 
 if not DEMO_MODE:
     if USE_ALPACA:
-        print("[Config] Data Source: ALPACA (Paper Trading)")
         from broker.alpaca_adapter import AlpacaAdapter
         _adapter = AlpacaAdapter()
     else:
-        print("[Config] Data Source: MOCK (Development)")
         from broker.mock_adapter import MockAdapter
         _adapter = MockAdapter()
 
@@ -123,7 +171,6 @@ def get_sector_heatmap():
 def get_market_data():
     """Returns candles and news headlines."""
     if DEMO_MODE:
-        # Generate realistic mock candles for demo
         candles = [
             {"timestamp": f"2026-01-31T10:{i:02d}:00Z", "high": 100+i, "low": 98+i, "close": 99+i}
             for i in range(20)
@@ -135,7 +182,6 @@ def get_market_data():
         ]
         return candles, headlines
     
-    # Get candles from adapter
     candles = _adapter.get_recent_candles("SPY", 20)
     
     if not candles:
@@ -304,15 +350,24 @@ def run_demo_scenario():
 # =============================================================================
 
 def run_full_system_demo():
-    print("\n" + "=" * 70)
+    # Print capability disclosure FIRST
+    print_run_configuration()
+    
+    print("=" * 70)
     print("🧠 PORTFOLIO INTELLIGENCE SYSTEM - END-TO-END DEMO")
     print("=" * 70)
     
     if DEMO_MODE:
-        print(f"📊 Running with: {DEMO_PROFILE} profile")
+        from demo.demo_profiles import get_profile_description
+        print(f"📊 Profile: {DEMO_PROFILE}")
+        print(f"   → {get_profile_description(DEMO_PROFILE)}")
+        if DEMO_TREND != "NEUTRAL":
+            from demo.trend_overlays import get_overlay_description
+            print(f"🌊 Trend: {DEMO_TREND}")
+            print(f"   → {get_overlay_description(DEMO_TREND)}")
     
     # ---------------------------------------------------------
-    # 1. PHASE 2 - SIGNAL GENERATION
+    # PHASE 2 - SIGNAL GENERATION
     # ---------------------------------------------------------
     print("\n" + "=" * 60)
     print("=== PHASE 2: SIGNAL GENERATION ===")
@@ -326,17 +381,35 @@ def run_full_system_demo():
     baseline_atr = current_atr * 1.1
     vol_res = volatility_metrics.classify_volatility_state(current_atr=current_atr, baseline_atr=baseline_atr)
     vol_state = vol_res["volatility_state"]
+    
+    # Apply trend overlay
+    if DEMO_MODE and DEMO_TREND != "NEUTRAL" and _trend_overlay:
+        vol_state = apply_overlay_to_volatility(vol_state, DEMO_TREND)
+    
     print(f"[Signal] Volatility State: {vol_state} (ATR: {current_atr:.2f})")
     
     # B. News
     news_res = news_scorer.score_tech_news(headlines)
     news_score = news_res["news_score"]
+    
+    # Apply trend overlay
+    if DEMO_MODE and DEMO_TREND != "NEUTRAL" and _trend_overlay:
+        news_score = apply_overlay_to_news(news_score, DEMO_TREND)
+    
     print(f"[Signal] News Sentiment:   {news_score}/100 ({news_res['headline_count']} headlines)")
     
     # C. Sector Confidence
     conf_res = sector_confidence.compute_sector_confidence(vol_state, news_score)
     confidence = conf_res["sector_confidence"]
+    
+    # Apply trend overlay
+    if DEMO_MODE and DEMO_TREND != "NEUTRAL" and _trend_overlay:
+        confidence = apply_overlay_to_confidence(confidence, DEMO_TREND)
+    
     print(f"[Signal] Sector Confidence: {confidence}/100")
+    
+    if DEMO_MODE and DEMO_TREND != "NEUTRAL":
+        print(f"         (Modified by {DEMO_TREND} overlay)")
     
     market_context = {
         "candles": candles,
@@ -344,7 +417,7 @@ def run_full_system_demo():
     }
 
     # ---------------------------------------------------------
-    # 2. PHASE 3 - DECISION MAKING
+    # PHASE 3 - DECISION MAKING
     # ---------------------------------------------------------
     print("\n" + "=" * 60)
     print("=== PHASE 3: DECISION MAKING ===")
@@ -393,7 +466,7 @@ def run_full_system_demo():
         print(f"   → {reason}")
 
     # ---------------------------------------------------------
-    # 3. DECISIONS & EXPLANATIONS
+    # DECISIONS & EXPLANATIONS
     # ---------------------------------------------------------
     print("\n" + "=" * 60)
     print("=== PHASE 3: DECISIONS WITH EXPLANATIONS ===")
@@ -412,7 +485,6 @@ def run_full_system_demo():
             print(f"\n   {action_color} {d['type']:<10} | {d['target']:<8} → {d['action']}")
             print(f"      Score: {d.get('score', 'N/A')}")
             
-            # Show explanations
             reasons = d.get('reasons', [d.get('reason', 'No explanation')])
             if isinstance(reasons, list):
                 for i, r in enumerate(reasons[:3], 1):
@@ -421,7 +493,7 @@ def run_full_system_demo():
                 print(f"      → {reasons}")
 
     # ---------------------------------------------------------
-    # 4. SAFETY & GUARDRAILS
+    # SAFETY & GUARDRAILS
     # ---------------------------------------------------------
     print("\n" + "=" * 60)
     print("=== PHASE 4: SAFETY GUARDRAILS ===")
@@ -435,14 +507,9 @@ def run_full_system_demo():
             print(f"\n   ❌ {b['type']:<10} | {b['target']:<8} → {b['action']}")
             safety_reason = b.get('safety_reason', b.get('blocking_guard', 'Safety violation'))
             print(f"      🛑 BLOCKED: {safety_reason}")
-            reasons = b.get('reasons', [])
-            if reasons:
-                print(f"      Would-be reasons:")
-                for i, r in enumerate(reasons[:2], 1):
-                    print(f"        {i}. {r}")
 
     # ---------------------------------------------------------
-    # 5. EXECUTION PLANNING
+    # EXECUTION PLANNING
     # ---------------------------------------------------------
     print("\n" + "=" * 60)
     print("=== PHASE 5: EXECUTION PLANNING ===")
@@ -490,8 +557,11 @@ def run_full_system_demo():
     
     print("=" * 70)
     
-    if DEMO_MODE:
-        print(f"\n💡 Try other profiles: DEMO_PROFILE=BALANCED_TECH or DEMO_PROFILE=LOSING_PORTFOLIO")
+    # Available options
+    print("\n💡 Available Options:")
+    print("   Profiles: " + ", ".join(get_available_profiles() if DEMO_MODE else ["N/A"]))
+    print("   Trends:   " + ", ".join(get_available_overlays() if DEMO_MODE else ["N/A"]))
+    print("\n   Example: DEMO_PROFILE=LOSING_PORTFOLIO DEMO_TREND=VOLATILITY_SHOCK python3 full_system_demo.py")
 
 
 if __name__ == "__main__":
