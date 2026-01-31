@@ -26,17 +26,17 @@ except ImportError:
         # Fallback for systems without timezone lib (not ideal but functional)
         eastern_tz = None
 
+_cached_status = None
+
 def get_market_status() -> Dict[str, str]:
     """
     Determines if the US stock market is currently open.
-    
-    Returns:
-        dict: {
-            "status": "OPEN" | "CLOSED",
-            "reason": Description of why (e.g., "After hours", "Weekend", "Market Open"),
-            "timestamp": ISO timestamp
-        }
+    Computed ONCE per run to avoid mid-run switching.
     """
+    global _cached_status
+    if _cached_status:
+        return _cached_status
+
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     
     # Check if Alpaca API is available to get authoritative clock
@@ -53,11 +53,13 @@ def get_market_status() -> Dict[str, str]:
             status = "OPEN" if clock.is_open else "CLOSED"
             reason = "Market is Open" if clock.is_open else "Market is Closed (Alpaca Clock)"
             
-            return {
+            global _cached_status
+            _cached_status = {
                 "status": status,
                 "reason": reason,
                 "timestamp": now_utc.isoformat()
             }
+            return _cached_status
         except Exception as e:
             # Fallback to local calculation if API fails
             pass
@@ -106,10 +108,14 @@ def determine_execution_context() -> Dict[str, str]:
     Decides the precise execution context.
     Differentiates between System Deployment Mode and actual Data Connectivity.
     
+    Strict Mapping:
+    - OPEN   => LIVE
+    - CLOSED => HISTORICAL
+    
     Concepts:
-    - system_mode:     PAPER (Advisory) vs DEMO (Profiles)
+    - system_mode:     PAPER (Advisory)
     - market_status:   OPEN vs CLOSED
-    - data_feed_mode:  LIVE (Real-time) vs SYNTHETIC (Failover/Closed)
+    - data_feed_mode:  LIVE vs HISTORICAL
     """
     market_info = get_market_status()
     market_status = market_info["status"]
@@ -117,27 +123,19 @@ def determine_execution_context() -> Dict[str, str]:
     # Check Credentials
     has_creds = bool(os.environ.get("ALPACA_API_KEY") and os.environ.get("ALPACA_SECRET_KEY"))
     
-    # SYSTEM MODE: Deployment Intention
-    # Defaults to PAPER if creds exist, else DEMO
-    system_mode = "PAPER (Advisory)" if has_creds else "DEMO (Profiles)"
-    
-    # DATA FEED MODE: Actual Integrity
-    if market_status == "OPEN" and has_creds:
+    if market_status == "OPEN":
+        # Rule: OPEN => LIVE ONLY
         data_feed_mode = "LIVE"
         data_capability = "Alpaca + Polygon"
-        description = "Real-time market data enabled."
-    elif market_status == "OPEN" and not has_creds:
-        data_feed_mode = "SYNTHETIC"
-        data_capability = "Synthetic Generator"
-        description = "Market is open but missing keys. Using synthetic data."
+        description = "Market is open. System fetching live portfolio and market data via Alpaca + Polygon."
     else:
-        # Market Closed
-        data_feed_mode = "SYNTHETIC"
-        data_capability = "Synthetic Generator"
-        description = "Market Closed. Using synthetic data for validation."
+        # Rule: CLOSED => HISTORICAL ONLY
+        data_feed_mode = "HISTORICAL"
+        data_capability = "Alpaca Historical Cache"
+        description = "Market is closed. System is operating on Alpaca historical market data to validate decision logic over extended periods."
         
     return {
-        "system_mode": system_mode,
+        "system_mode": "PAPER (Advisory)",
         "market_status": market_status,
         "data_feed_mode": data_feed_mode,
         "data_capability": data_capability,

@@ -1,132 +1,6 @@
-/**
- * BuriBuri Trading - Frontend Controller
- * 
- * Handles UI updates and backend API communication.
- * Designed for clarity and maintainability.
- */
-
-// =============================================================================
-// CONFIGURATION
-// =============================================================================
-
 const CONFIG = {
     API_BASE: 'http://127.0.0.1:5001',
-    MOCK_MODE: false,  // Set to false when backend is running
-};
-
-// =============================================================================
-// MOCK DATA (Used when backend is not available)
-// =============================================================================
-
-const MOCK_DATA = {
-    run_id: "demo-" + Date.now().toString(36),
-    timestamp: new Date().toISOString(),
-    data_source: "DEMO",
-    profile: "OVERCONCENTRATED_TECH",
-
-    // Phase 2: Signals
-    signals: {
-        volatility_state: "STABLE",
-        news_score: 62,
-        sector_confidence: 58,
-        atr: 2.34
-    },
-
-    // Phase 3: Market Posture
-    market_posture: {
-        market_posture: "DEFENSIVE",
-        risk_level: "MEDIUM",
-        reasons: [
-            "Sector concentration exceeds safe threshold",
-            "Volatility regime is stable but confidence is moderate"
-        ]
-    },
-
-    // Portfolio State
-    portfolio: {
-        total_capital: 1000000,
-        cash: 35000,
-        position_count: 5,
-        avg_vitals: 54,
-        concentration_risk: "HIGH",
-        capital_lockin: "12%"
-    },
-
-    // Decisions
-    decisions: [
-        {
-            type: "POSITION",
-            target: "NVDA",
-            action: "MAINTAIN",
-            score: 82,
-            reasons: [
-                "Strong position vitals (82/100)",
-                "Sector momentum remains positive",
-                "No concentration breach on this position"
-            ]
-        },
-        {
-            type: "POSITION",
-            target: "AMD",
-            action: "TRIM_RISK",
-            score: 31,
-            reasons: [
-                "Position vitals critically low (31/100)",
-                "Contributes to sector over-concentration",
-                "Better opportunities available in other sectors"
-            ]
-        },
-        {
-            type: "POSITION",
-            target: "MSFT",
-            action: "HOLD",
-            score: 65,
-            reasons: [
-                "Moderate vitals score (65/100)",
-                "Stable performance, no immediate action needed"
-            ]
-        },
-        {
-            type: "CANDIDATE",
-            target: "XLE",
-            action: "ALLOCATE",
-            score: 78,
-            reasons: [
-                "Energy sector shows rotation opportunity",
-                "Would reduce TECH concentration",
-                "High projected efficiency (78/100)"
-            ]
-        },
-        {
-            type: "CANDIDATE",
-            target: "MORE_TECH",
-            action: "BLOCK_RISK",
-            score: 85,
-            blocked: true,
-            blocking_guard: "Concentration Guard",
-            reasons: [
-                "High efficiency score (85/100) but blocked",
-                "TECH sector already over-concentrated (82%)",
-                "Safety guardrail prevents additional TECH exposure"
-            ]
-        }
-    ],
-
-    // Safety Warnings
-    warnings: [
-        {
-            type: "danger",
-            message: "TECH sector concentration at 82% (limit: 60%)"
-        },
-        {
-            type: "warning",
-            message: "Cash reserves below target (3.5% vs 10% target)"
-        },
-        {
-            type: "info",
-            message: "1 candidate blocked by concentration guard"
-        }
-    ]
+    MOCK_MODE: false,
 };
 
 // =============================================================================
@@ -134,9 +8,19 @@ const MOCK_DATA = {
 // =============================================================================
 
 const elements = {
-    // Header
+    // Header & Global Status
     statusBadge: document.getElementById('status-badge'),
     runBtn: document.getElementById('run-btn'),
+    marketStatus: document.getElementById('ui-market-status'),
+    dataFeed: document.getElementById('ui-data-feed'),
+    dataSource: document.getElementById('ui-data-source'),
+    modeDesc: document.getElementById('ui-mode-desc'),
+
+    // Control Selectors
+    symbolSelector: document.getElementById('symbol-selector'),
+    rangeSelector: document.getElementById('range-selector'),
+    scenarioSelector: document.getElementById('scenario-selector'),
+    historicalControls: document.getElementById('historical-controls'),
 
     // Market Overview
     marketPosture: document.getElementById('market-posture'),
@@ -163,327 +47,185 @@ const elements = {
 // UI UPDATE FUNCTIONS
 // =============================================================================
 
-/**
- * Update the status badge in the header
- */
 function setStatus(status, text) {
     elements.statusBadge.className = 'status-badge ' + status;
     elements.statusBadge.textContent = text;
 }
 
 /**
- * Render Scenario Badges and Description
+ * Handle Market Transparency Updates
  */
-function updateScenarioBadges(data) {
-    const container = document.getElementById('scenario-badges');
-    if (!container) return;
+function updateTransparency(wrapper) {
+    if (!wrapper) return;
 
-    const scenario = data.scenario_meta || {};
+    // 1. Market Status (OPEN/CLOSED)
+    const mktStatus = wrapper.market_status?.status || "UNKNOWN";
+    elements.marketStatus.textContent = mktStatus;
+    elements.marketStatus.className = 'status-value highlight ' + mktStatus.toLowerCase();
 
-    if (scenario.badges && scenario.badges.length > 0) {
-        const badgesHtml = scenario.badges.map(b =>
-            `<span class="scenario-badge">✔ ${b}</span>`
-        ).join('');
+    // 2. Data Feed Mode
+    elements.dataFeed.textContent = wrapper.data_mode || "—";
+    
+    // 3. Data Source
+    elements.dataSource.textContent = wrapper.portfolio_source || "—";
 
-        let descHtml = '';
-        if (scenario.description) {
-            descHtml = `<div class="scenario-desc">${scenario.header_emoji || ''} ${scenario.description}</div>`;
-        }
+    // 4. Description (Authoritative Wording)
+    const analysis = wrapper.analysis || {};
+    const posture = analysis.market_posture || {};
+    elements.modeDesc.textContent = posture.description || "System operating normally.";
 
-        container.innerHTML = descHtml + `<div class="badges-row">${badgesHtml}</div>`;
-        container.classList.add('visible');
+    // 5. Toggle Historical Controls
+    if (mktStatus === "OPEN") {
+        elements.historicalControls.classList.add('hidden');
     } else {
-        container.innerHTML = '';
-        container.classList.remove('visible');
+        elements.historicalControls.classList.remove('hidden');
     }
 }
 
-/**
- * Update market overview panel
- */
 function updateMarketOverview(data) {
-    // Market Posture
     const posture = data.market_posture?.market_posture || 'NEUTRAL';
     elements.marketPosture.textContent = posture.replace('_', ' ');
     elements.marketPosture.className = 'metric-value posture ' + posture.toLowerCase();
 
-    // Signals
     elements.volatilityState.textContent = data.signals?.volatility_state || '—';
-    elements.newsScore.textContent = data.signals?.news_score ?
-        `${data.signals.news_score}/100` : '—';
-    elements.sectorConfidence.textContent = data.signals?.sector_confidence ?
-        `${data.signals.sector_confidence}/100` : '—';
+    elements.newsScore.textContent = data.signals?.news_score ? `${data.signals.news_score}/100` : '—';
+    elements.sectorConfidence.textContent = data.signals?.sector_confidence ? `${data.signals.sector_confidence}/100` : '—';
 }
 
-/**
- * Update portfolio health panel
- */
 function updatePortfolioHealth(data) {
     const portfolio = data.portfolio || {};
+    elements.positionCount.textContent = portfolio.position_count || '0';
 
-    elements.positionCount.textContent = portfolio.position_count || '—';
-
-    // Avg Vitals with color coding
     const avgVitals = portfolio.avg_vitals;
     if (avgVitals !== undefined) {
         elements.avgVitals.textContent = `${avgVitals}/100`;
         elements.avgVitals.className = 'health-value ' + getScoreClass(avgVitals);
-    } else {
-        elements.avgVitals.textContent = '—';
     }
 
-    elements.capitalLockin.textContent = portfolio.capital_lockin || '—';
+    elements.capitalLockin.textContent = portfolio.capital_lockin || 'NONE';
 
-    // Concentration Risk with color coding
     const risk = portfolio.concentration_risk;
     if (risk) {
         elements.concentrationRisk.textContent = risk;
         elements.concentrationRisk.className = 'health-value ' + getRiskClass(risk);
-    } else {
-        elements.concentrationRisk.textContent = '—';
     }
 }
 
-/**
- * Render decision cards
- */
 function renderDecisions(decisions) {
+    const feed = elements.decisionFeed;
+    const empty = elements.emptyDecisions;
+    
+    // Clear existing
+    const cards = feed.querySelectorAll('.decision-card');
+    cards.forEach(c => c.remove());
+
     if (!decisions || decisions.length === 0) {
-        elements.emptyDecisions.classList.remove('hidden');
+        empty.classList.remove('hidden');
         return;
     }
 
-    elements.emptyDecisions.classList.add('hidden');
+    empty.classList.add('hidden');
+    decisions.forEach(d => {
+        const card = document.createElement('div');
+        card.className = 'decision-card' + (d.blocked ? ' blocked-action' : '');
+        
+        const actionClass = (d.action || '').toLowerCase().replace(/\s+/g, '_');
+        const reasons = d.reasons || [];
 
-    // Clear existing decisions
-    const existingCards = elements.decisionFeed.querySelectorAll('.decision-card');
-    existingCards.forEach(card => card.remove());
-
-    // Render each decision
-    decisions.forEach(decision => {
-        const card = createDecisionCard(decision);
-        elements.decisionFeed.appendChild(card);
-    });
-}
-
-/**
- * Create a single decision card element
- */
-function createDecisionCard(decision) {
-    const card = document.createElement('div');
-    card.className = 'decision-card' + (decision.blocked ? ' blocked-action' : '');
-
-    const actionClass = getActionClass(decision.action);
-    const reasons = decision.reasons || [];
-
-    card.innerHTML = `
-        <div class="decision-header">
-            <div class="decision-target">
-                <span class="decision-symbol">${decision.target}</span>
-                <span class="decision-type">${decision.type}</span>
+        card.innerHTML = `
+            <div class="decision-header">
+                <div class="decision-target">
+                    <span class="decision-symbol">${d.target}</span>
+                    <span class="decision-type">${d.type}</span>
+                </div>
+                <span class="decision-action ${actionClass}">${d.action.replace('_', ' ')}</span>
             </div>
-            <span class="decision-action ${actionClass}">${decision.action.replace('_', ' ')}</span>
-        </div>
-        ${decision.blocked ? `<div class="blocked-reason">⛔ Blocked by ${decision.blocking_guard || 'Safety Guard'}</div>` : ''}
-        <div class="decision-reasons">
-            <div class="decision-reasons-title">Reasoning</div>
-            <ul class="decision-reasons-list">
-                ${reasons.map(r => `<li>${r}</li>`).join('')}
-            </ul>
-        </div>
-        <div class="decision-score">Confidence Score: ${decision.score}/100</div>
-    `;
-
-    return card;
+            ${d.blocked ? `<div class="blocked-reason">⛔ Blocked by ${d.blocking_guard || 'Safety Guard'}</div>` : ''}
+            <div class="decision-reasons">
+                <div class="decision-reasons-title">Logic Justification</div>
+                <ul class="decision-reasons-list">
+                    ${reasons.map(r => `<li>${r}</li>`).join('')}
+                </ul>
+            </div>
+            <div class="decision-score">Confidence Score: ${d.score}/100</div>
+        `;
+        feed.appendChild(card);
+    });
 }
 
-/**
- * Render warnings list
- */
 function renderWarnings(warnings) {
+    const list = elements.warningsList;
+    const empty = elements.emptyWarnings;
+    
+    const items = list.querySelectorAll('.warning-item');
+    items.forEach(i => i.remove());
+
     if (!warnings || warnings.length === 0) {
-        elements.emptyWarnings.classList.remove('hidden');
+        empty.classList.remove('hidden');
         return;
     }
 
-    elements.emptyWarnings.classList.add('hidden');
-
-    // Clear existing warnings
-    const existingItems = elements.warningsList.querySelectorAll('.warning-item');
-    existingItems.forEach(item => item.remove());
-
-    // Render each warning
-    warnings.forEach(warning => {
+    empty.classList.add('hidden');
+    warnings.forEach(w => {
         const item = document.createElement('div');
-        item.className = 'warning-item ' + (warning.type || 'info');
-
-        const icon = getWarningIcon(warning.type);
-        item.innerHTML = `
-            <span class="warning-icon">${icon}</span>
-            <span class="warning-text">${warning.message}</span>
-        `;
-
-        elements.warningsList.appendChild(item);
+        item.className = 'warning-item ' + (w.type || 'info');
+        
+        const icon = w.type === 'danger' ? '🚨' : w.type === 'warning' ? '⚠️' : 'ℹ️';
+        item.innerHTML = `<span class="warning-icon">${icon}</span><span class="warning-text">${w.message}</span>`;
+        list.appendChild(item);
     });
 }
 
 // =============================================================================
-// HELPER FUNCTIONS
+// HELPERS
 // =============================================================================
 
-function getScoreClass(score) {
-    if (score >= 65) return 'positive';
-    if (score >= 40) return 'warning';
-    return 'danger';
-}
-
-function getRiskClass(risk) {
-    const r = (risk || '').toLowerCase();
-    if (r === 'low' || r === 'none') return 'positive';
-    if (r === 'medium' || r === 'moderate') return 'warning';
-    return 'danger';
-}
-
-function getActionClass(action) {
-    return (action || '').toLowerCase().replace(/\s+/g, '_');
-}
-
-function getWarningIcon(type) {
-    switch (type) {
-        case 'danger': return '🚨';
-        case 'warning': return '⚠️';
-        case 'success': return '✅';
-        default: return 'ℹ️';
-    }
+function getScoreClass(s) { return s >= 65 ? 'positive' : s >= 40 ? 'warning' : 'danger'; }
+function getRiskClass(r) { 
+    r = r.toLowerCase();
+    return (r === 'low' || r === 'none') ? 'positive' : (r === 'medium' || r === 'moderate') ? 'warning' : 'danger'; 
 }
 
 // =============================================================================
 // API COMMUNICATION
-// =============================================================================
-
-// =============================================================================
-// API COMMUNICATION
-// =============================================================================
-
-/**
- * Fetch analysis data from backend
- */
-async function fetchAnalysis() {
-    if (CONFIG.MOCK_MODE) {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return {
-            analysis: MOCK_DATA,
-            market_status: { label: "MOCK", is_open: false, timestamp: new Date().toISOString() },
-            data_mode: "MOCK"
-        };
-    }
-
-    const selector = document.getElementById("scenario-selector");
-    const scenario = selector ? selector.value : "NORMAL";
-
-    const symbolInput = document.getElementById("symbol-input");
-    const symbol = symbolInput ? symbolInput.value : "";
-
-    const response = await fetch(`${CONFIG.API_BASE}/run?scenario=${scenario}&symbol=${symbol}`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-    });
-
-    if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-    }
-
-    return await response.json();
-}
-
-/**
- * Update Market Status Badge and Message
- */
-function updateMarketStatus(wrapper) {
-    if (!wrapper || !wrapper.market_status) return;
-
-    const status = wrapper.market_status;
-    const isClosed = !status.is_open;
-    const badge = document.getElementById('status-badge');
-
-    // Update Badge
-    if (badge) {
-        badge.textContent = status.label || (status.is_open ? "OPEN" : "CLOSED");
-        badge.className = 'status-badge ' + (status.is_open ? 'success' : 'danger');
-    }
-
-    // Show Historical Data Warning if Closed AND not already a scenario
-    // If it is a scenario (wrapper.data_mode == "SCENARIO"), that takes precedence.
-    const mode = wrapper.data_mode || "UNKNOWN";
-    const source = wrapper.portfolio_source || "UNKNOWN";
-
-    let message = "";
-    if (mode === "HISTORICAL") {
-        message = `Live Market Closed. Using Historical Data for ${wrapper.symbols_used?.[0] || 'Analysis'}.`;
-    } else if (mode === "LIVE") {
-        message = `Live Market Data. Connected to Alpaca & Polygon.`;
-    } else if (mode === "SCENARIO") {
-        message = "Scenario Simulation Active.";
-    }
-
-    // Inject message into header or overview
-    // We can use the existing 'scenario-badges' container if empty, or prepend to it
-    // Or just set the tooltip title of the badge?
-    if (badge) badge.title = message + ` \nSource: ${source}`;
-
-    // Also log to console for demo clarity
-    console.log(`[System] Mode: ${mode} | Status: ${status.label} | Source: ${source}`);
-}
-
-// =============================================================================
-// MAIN RUN HANDLER
 // =============================================================================
 
 async function runAnalysis() {
     try {
-        // Update UI to running state
-        setStatus('running', 'Running...');
+        setStatus('running', 'Analyzing...');
         elements.runBtn.disabled = true;
-        elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+        elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Running Pipeline...';
 
-        // Fetch data
-        const wrapper = await fetchAnalysis();
-        const data = wrapper.analysis || wrapper; // Fallback for safety
+        const scenario = elements.scenarioSelector.value;
+        const symbol = elements.symbolSelector.value;
+        const range = elements.rangeSelector.value;
 
-        // Update Market Status UI
-        updateMarketStatus(wrapper);
+        const url = `${CONFIG.API_BASE}/run?scenario=${scenario}&symbol=${symbol}&time_range=${range}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+        
+        const wrapper = await response.json();
+        const data = wrapper.analysis || {};
 
-        // Update all panels using appropriate data mapping
+        // 1. Transparency Bar
+        updateTransparency(wrapper);
+
+        // 2. Panels
         updateMarketOverview(data);
-        updateScenarioBadges(data);
         updatePortfolioHealth(data);
         renderDecisions(data.decisions);
+        renderWarnings(data.blocked_by_safety?.map(b => ({
+            type: 'warning',
+            message: `Safety Block: ${b.target} → ${b.action} (${b.blocking_guard})`
+        })) || []);
 
-        // Handle Warnings
-        // Analysis might have warnings, or we might add system warnings
-        const warnings = data.warnings || [];
-        if (wrapper.market_status && !wrapper.market_status.is_open && wrapper.data_mode === "HISTORICAL") {
-            warnings.unshift({
-                type: 'warning',
-                message: `Market is CLOSED. Using historical data (Polygon.io).`
-            });
-        }
-        renderWarnings(warnings);
-
-        // Update status text (bottom controller)
         setStatus('complete', 'Complete');
 
-    } catch (error) {
-        console.error('Analysis failed:', error);
-        setStatus('error', 'Error');
-
-        // Show error in warnings
-        renderWarnings([{
-            type: 'danger',
-            message: `Failed to connect to backend. ${CONFIG.MOCK_MODE ? 'Using mock data.' : 'Ensure Flask is running.'} (${error.message})`
-        }]);
-
+    } catch (err) {
+        console.error(err);
+        setStatus('error', 'Failed');
+        renderWarnings([{ type: 'danger', message: `Pipeline Execution Failed: ${err.message}` }]);
     } finally {
         elements.runBtn.disabled = false;
         elements.runBtn.textContent = 'Run Analysis';
@@ -495,9 +237,10 @@ async function runAnalysis() {
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Bind run button
     elements.runBtn.addEventListener('click', runAnalysis);
-
-    console.log('BuriBuri Trading UI initialized');
-    console.log('Mock mode:', CONFIG.MOCK_MODE);
+    
+    // Initial silent run to detect market status
+    runAnalysis();
+    
+    console.log('BuriBuri Trading: Market-Aware Pipeline Initialized.');
 });

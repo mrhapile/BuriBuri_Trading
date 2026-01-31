@@ -20,22 +20,30 @@ api = Blueprint("api", __name__)
 @api.route("/run", methods=["GET"])
 def run_agent():
     """
-    Executes Phase 2 → Phase 4 pipeline using mock inputs.
+    Executes Phase 2 → Phase 4 pipeline.
+    Routed by Market Status.
     Returns JSON only.
-    
-    This is a READ-ONLY endpoint. No side effects.
     """
     try:
-        # Get scenario from query param (default None)
+        # Get parameters from query string
         scenario = request.args.get("scenario")
         symbol = request.args.get("symbol")
+        time_range = request.args.get("time_range")
         
         if scenario == "NORMAL" or scenario == "":
             scenario = None
             
-        result = run_demo_scenario(scenario_id=scenario, symbol=symbol)
+        # Execute Pipeline
+        result = run_demo_scenario(
+            scenario_id=scenario, 
+            symbol=symbol, 
+            time_range=time_range
+        )
         return jsonify(result)
     except Exception as e:
+        import traceback
+        print(f"❌ API Execution Error: {e}")
+        traceback.print_exc()
         return jsonify({
             "error": str(e),
             "status": "FAILED"
