@@ -3,6 +3,7 @@ import capital_lock_in
 import opportunity_scanner
 import opportunity_logic
 import concentration_guard
+import decision_explainer
 import risk_guardrails
 
 def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: dict, candidates: list) -> dict:
@@ -12,7 +13,8 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     2. Capital Lock-in Detector (Portfolio Efficiency)
     3. Opportunity Scanner (Relative Value)
     4. Concentration Guard (Risk Control)
-    5. Risk Guardrails (Safety Gate)
+    5. Decision Explainability (Human-Readable Reasons)
+    6. Risk Guardrails (Final Safety Gate)
 
     Args:
         portfolio_state (dict): {total_capital, cash, ...}
@@ -179,7 +181,38 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         })
 
     # ---------------------------------------------------------
-    # 6. RISK GUARDRAILS (Final Safety Gate)
+    # 6. EXPLANATION LAYER (Phase 2 → Human-Readable)
+    # ---------------------------------------------------------
+    # Collect signals for explainer (NO recomputation)
+    portfolio_signals = {
+        "dead_capital_symbols": dead_capital_symbols,
+        "hot_sectors": hot_sectors,
+        "reallocation_pressure": reallocation_pressure,
+        "pressure_score": lock_in_report["pressure_score"]
+    }
+    
+    risk_signals = {
+        "concentration_warning": conc_warning,
+        "better_opp_exists": better_opp_exists,
+        "opp_confidence": opp_confidence
+    }
+    
+    # Enrich decisions with structured explanations
+    # Note: sector already added in step 5, but ensure flags are present
+    for decision in decisions:
+        if decision["type"] == "POSITION":
+            matching_pos = next((p for p in analyzed_positions if p["symbol"] == decision["target"]), None)
+            if matching_pos:
+                decision["flags"] = matching_pos.get("flags", [])
+    
+    enriched_decisions = decision_explainer.enrich_decisions_with_explanations(
+        decisions,
+        portfolio_signals,
+        risk_signals
+    )
+
+    # ---------------------------------------------------------
+    # 7. RISK GUARDRAILS (Final Safety Gate)
     # ---------------------------------------------------------
     # Build risk context from already-computed signals
     risk_context = {
@@ -189,9 +222,9 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         "volatility_state": portfolio_state.get("volatility_state", "STABLE")  # Optional signal
     }
     
-    # Apply safety filters
+    # Apply safety filters to enriched decisions
     guardrail_results = risk_guardrails.apply_risk_guardrails(
-        decisions,
+        enriched_decisions,
         risk_context
     )
     
@@ -203,7 +236,7 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     guardrail_summary = risk_guardrails.summarize_guardrail_results(guardrail_results)
 
     # ---------------------------------------------------------
-    # 7. Final Report
+    # 8. Final Report
     # ---------------------------------------------------------
     summary_parts = [lock_in_report["summary"]]
     if conc_warning["is_concentrated"]:
@@ -293,23 +326,29 @@ def run_demo():
     conc = report_t1["concentration_risk"]
     print(f"Concentration: {conc['severity']} (Dom: {conc['dominant_sector']} @ {conc['exposure']:.0%})")
     
-    print("\n" + "-" * 75)
-    print("APPROVED ACTIONS")
-    print("-" * 75)
-    print(f"{'TARGET':<12} | {'TYPE':<10} | {'ACTION':<18} | {'REASON'}")
-    print("-" * 75)
+    # Display approved decisions with explanations
+    print("\n" + "=" * 80)
+    print("✅ APPROVED ACTIONS (WITH EXPLANATIONS)")
+    print("=" * 80)
     for d in report_t1["decisions"]:
-        print(f"{d['target']:<12} | {d['type']:<10} | {d['action']:<18} | {d['reason']}")
+        print(f"\n[{d['type']}] {d['target']} → {d['action']}")
+        print(f"  Structured Reasons:")
+        reasons = d.get('reasons', [d.get('reason', 'No explanation')])
+        for i, reason in enumerate(reasons, 1):
+            print(f"    {i}. {reason}")
     
-    # Display blocked actions
+    # Display blocked actions with explanations
     if report_t1.get("blocked_by_safety"):
-        print("\n" + "-" * 75)
+        print("\n" + "=" * 80)
         print("🛡️  BLOCKED BY SAFETY GUARDRAILS")
-        print("-" * 75)
-        print(f"{'TARGET':<12} | {'TYPE':<10} | {'ACTION':<18} | {'SAFETY REASON'}")
-        print("-" * 75)
+        print("=" * 80)
         for b in report_t1["blocked_by_safety"]:
-            print(f"{b['target']:<12} | {b['type']:<10} | {b['action']:<18} | {b['reason']}")
+            print(f"\n[{b['type']}] {b['target']} → {b['action']} ❌")
+            print(f"  🚫 Safety Block: {b['reason']}")
+            if b.get('reasons'):
+                print(f"  Would-be Explanations:")
+                for i, reason in enumerate(b['reasons'], 1):
+                    print(f"    {i}. {reason}")
 
 if __name__ == "__main__":
     run_demo()
