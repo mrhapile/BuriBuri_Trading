@@ -12,6 +12,7 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     2. Capital Lock-in Detector (Portfolio Efficiency)
     3. Opportunity Scanner (Relative Value)
     4. Concentration Guard (Risk Control)
+    5. Risk Guardrails (Safety Gate)
 
     Args:
         portfolio_state (dict): {total_capital, cash, ...}
@@ -126,7 +127,8 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
             "type": "POSITION",
             "action": action,
             "reason": reason,
-            "score": vitals
+            "score": vitals,
+            "sector": sector
         })
 
     # B. Process Candidates
@@ -172,9 +174,9 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
             "type": "CANDIDATE",
             "action": action,
             "reason": reason,
-            "score": eff_score
+            "score": eff_score,
+            "sector": sector
         })
-
 
     # ---------------------------------------------------------
     # 6. RISK GUARDRAILS (Final Safety Gate)
@@ -286,8 +288,7 @@ def run_demo():
 
     report_t1 = run_decision_engine(portfolio_t1, positions_t1, heatmap_t1, candidates_t1)
     
-    
-    print(f"Summary: {report_t1['portfolio_summary']}")
+    print(f"\nSummary: {report_t1['portfolio_summary']}")
     print(f"Pressure Score: {report_t1['pressure_score']}")
     conc = report_t1["concentration_risk"]
     print(f"Concentration: {conc['severity']} (Dom: {conc['dominant_sector']} @ {conc['exposure']:.0%})")
