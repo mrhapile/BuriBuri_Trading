@@ -101,14 +101,15 @@ def get_market_status() -> Dict[str, str]:
         "timestamp": now_utc.isoformat()
     }
 
-def determine_data_mode() -> Tuple[str, Dict]:
+def determine_execution_context() -> Dict[str, str]:
     """
-    Decides whether to run in LIVE or DEMO mode.
+    Decides the precise execution context.
+    Differentiates between System Deployment Mode and actual Data Connectivity.
     
-    Returns:
-        tuple: (Mode Name, Context Dict)
-        Mode Name: "LIVE" or "DEMO"
-        Context Dict: Metadata about the decision
+    Concepts:
+    - system_mode:     PAPER (Advisory) vs DEMO (Profiles)
+    - market_status:   OPEN vs CLOSED
+    - data_feed_mode:  LIVE (Real-time) vs SYNTHETIC (Failover/Closed)
     """
     market_info = get_market_status()
     market_status = market_info["status"]
@@ -116,25 +117,31 @@ def determine_data_mode() -> Tuple[str, Dict]:
     # Check Credentials
     has_creds = bool(os.environ.get("ALPACA_API_KEY") and os.environ.get("ALPACA_SECRET_KEY"))
     
-    # Logic: Data Mode
+    # SYSTEM MODE: Deployment Intention
+    # Defaults to PAPER if creds exist, else DEMO
+    system_mode = "PAPER (Advisory)" if has_creds else "DEMO (Profiles)"
+    
+    # DATA FEED MODE: Actual Integrity
     if market_status == "OPEN" and has_creds:
-        mode = "LIVE"
-        source = "Alpaca Paper API + Polygon"
+        data_feed_mode = "LIVE"
+        data_capability = "Alpaca + Polygon"
         description = "Real-time market data enabled."
     elif market_status == "OPEN" and not has_creds:
-        mode = "DEMO"
-        source = "Synthetic/Mock Data"
-        description = "Market is open, but API keys are missing. Fallback to Demo."
+        data_feed_mode = "SYNTHETIC"
+        data_capability = "Synthetic Generator"
+        description = "Market is open but missing keys. Using synthetic data."
     else:
         # Market Closed
-        mode = "DEMO"
-        source = "Synthetic/Mock Data"
-        description = "Market is closed. Using synthetic data for logic validation."
+        data_feed_mode = "SYNTHETIC"
+        data_capability = "Synthetic Generator"
+        description = "Market Closed. Using synthetic data for validation."
         
-    return mode, {
+    return {
+        "system_mode": system_mode,
         "market_status": market_status,
+        "data_feed_mode": data_feed_mode,
+        "data_capability": data_capability,
         "reason": market_info["reason"],
-        "data_source": source,
         "description": description,
         "timestamp": market_info["timestamp"]
     }

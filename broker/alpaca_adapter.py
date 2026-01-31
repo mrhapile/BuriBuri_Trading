@@ -227,20 +227,64 @@ class AlpacaAdapter:
             
             return candles
             
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 403:
-                # Common for free tier paper accounts without active data subscription
-                print(f"[Alpaca] Note: Real-time market data access restricted (403). using synthetic fallback.")
+        except RuntimeError as e:
+            # _request wraps HTTP errors in RuntimeError. Check string for 403.
+            if "403" in str(e):
+                print(f"[Alpaca] Note: Real-time market data access restricted (403). Trying Polygon.io fallback...")
+                polygon_candles = self._fetch_polygon_fallback(symbol, limit)
+                if polygon_candles:
+                    print(f"[Alpaca] Success: Retrieved {len(polygon_candles)} candles from Polygon.io")
+                    return polygon_candles
+                
+                print(f"[Alpaca] Warning: Polygon fallback failed or no key. Using synthetic fallback.")
                 return []
+            
             print(f"[Alpaca] Warning: Could not fetch candles for {symbol}: {e}")
-            return []
-        except requests.exceptions.RequestException as e:
-            print(f"[Alpaca] Warning: Network/API error for {symbol}: {e}")
             return []
         except Exception as e:
             print(f"[Alpaca] Error: Unexpected error fetching candles: {e}")
             return []
     
+    def _fetch_polygon_fallback(self, symbol: str, limit: int) -> List[Dict[str, Any]]:
+        """
+        Attempts to fetch candles from Polygon.io as a backup.
+        """
+        api_key = os.environ.get("POLYGON_API_KEY")
+        if not api_key:
+            return []
+            
+        # Calculate date range
+        end = datetime.now()
+        start = end - timedelta(days=limit + 5)
+        
+        # Polygon API
+        url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start.strftime('%Y-%m-%d')}/{end.strftime('%Y-%m-%d')}"
+        params = {"adjusted": "true", "sort": "asc", "limit": limit, "apiKey": api_key}
+        
+        try:
+            response = requests.get(url, params=params, timeout=5)
+            if response.status_code != 200:
+                return []
+                
+            data = response.json()
+            results = data.get("results", [])
+            
+            candles = []
+            for r in results:
+                if all(k in r for k in ("t", "o", "h", "l", "c")):
+                    candles.append({
+                        "timestamp": r["t"], # Ms timestamp usually fine, or convert if needed
+                        "open": float(r["o"]),
+                        "high": float(r["h"]),
+                        "low": float(r["l"]),
+                        "close": float(r["c"]),
+                        "volume": int(r.get("v", 0))
+                    })
+            return candles[-limit:]
+            
+        except Exception:
+            return []
+
     def _compute_simple_atr(self, candles: List[Dict], period: int = 14) -> float:
         """
         Compute simple ATR from candles.

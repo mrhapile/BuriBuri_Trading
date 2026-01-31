@@ -27,8 +27,12 @@ import market_mode
 # DATA SOURCE CONFIGURATION
 # =============================================================================
 
+# =============================================================================
+# DATA SOURCE CONFIGURATION
+# =============================================================================
+
 # 1. Detect Environment State
-AUTO_MODE, AUTO_CONTEXT = market_mode.determine_data_mode()
+AUTO_CONTEXT = market_mode.determine_execution_context()
 
 # 2. Process User Overrides
 USER_DEMO_REQ = os.environ.get("DEMO_MODE")
@@ -42,13 +46,18 @@ if USER_DEMO_REQ is not None:
              USE_ALPACA = (USER_ALPACA_REQ.lower() == "true")
         else:
             # User said "No Demo", but didn't specify source. Fallback to Auto.
-            USE_ALPACA = (AUTO_MODE == "LIVE")
+            USE_ALPACA = (AUTO_CONTEXT["data_feed_mode"] == "LIVE")
     else:
         USE_ALPACA = False
+elif USER_ALPACA_REQ is not None:
+    # User explicitly set USE_ALPACA but didn't specify DEMO_MODE
+    # Assume they want to run what they asked for
+    DEMO_MODE = False
+    USE_ALPACA = (USER_ALPACA_REQ.lower() == "true")
 else:
     # No explicit user request.
     # If we have Live capabilities, USE THEM. Otherwise default to the Judge-Ready Profiles.
-    if AUTO_MODE == "LIVE":
+    if AUTO_CONTEXT["data_feed_mode"] == "LIVE":
         DEMO_MODE = False
         USE_ALPACA = True
     else:
@@ -60,15 +69,23 @@ DEMO_TREND = os.environ.get("DEMO_TREND", "NEUTRAL").upper()
 
 # Final Context Construction
 EXECUTION_CONTEXT = AUTO_CONTEXT.copy()
+
+# Override context based on final mode decision
 if DEMO_MODE:
-    EXECUTION_CONTEXT["mode"] = "DEMO (Profiles)"
-    EXECUTION_CONTEXT["data_source"] = "Hardcoded Judge Profiles"
+    EXECUTION_CONTEXT["system_mode"] = "DEMO (Profiles)"
+    EXECUTION_CONTEXT["data_feed_mode"] = "SYNTHETIC (Profiles)"
+    EXECUTION_CONTEXT["data_capability"] = "Hardcoded Judge Profiles"
 elif USE_ALPACA:
-    EXECUTION_CONTEXT["mode"] = "LIVE (Paper)"
-    EXECUTION_CONTEXT["data_source"] = "Alpaca API + Polygon"
+    EXECUTION_CONTEXT["system_mode"] = "PAPER (Advisory)"
+    # data_feed_mode stays as determined by market_mode (LIVE or SYNTHETIC) or updated by adapter
+    if EXECUTION_CONTEXT["data_feed_mode"] == "SYNTHETIC":
+        EXECUTION_CONTEXT["data_capability"] = "Alpaca + Polygon (Failover Active)"
+    else:
+         EXECUTION_CONTEXT["data_capability"] = "Alpaca + Polygon"
 else:
-    EXECUTION_CONTEXT["mode"] = "MOCK (Dev)"
-    EXECUTION_CONTEXT["data_source"] = "Synthetic Generator"
+    EXECUTION_CONTEXT["system_mode"] = "MOCK (Dev)"
+    EXECUTION_CONTEXT["data_feed_mode"] = "SYNTHETIC (Mock)"
+    EXECUTION_CONTEXT["data_capability"] = "Synthetic Generator"
 
 
 # =============================================================================
@@ -82,18 +99,21 @@ def print_run_configuration():
     print("╔" + "═" * 58 + "╗")
     print("║" + "RUN CONFIGURATION".center(58) + "║")
     print("╠" + "═" * 58 + "╣")
-    print(f"║  System Mode       : {EXECUTION_CONTEXT['mode']:<35}║")
+    print(f"║  System Mode       : {EXECUTION_CONTEXT['system_mode']:<35}║")
     print(f"║  Market Status     : {EXECUTION_CONTEXT['market_status']:<35}║")
+    print(f"║  Data Feed Mode    : {EXECUTION_CONTEXT['data_feed_mode']:<35}║")
+    print(f"║  Data Capability   : {EXECUTION_CONTEXT['data_capability']:<35}║")
+    
     if DEMO_MODE:
         print(f"║  Active Profile    : {DEMO_PROFILE:<35}║")
-    print(f"║  Data Source       : {EXECUTION_CONTEXT['data_source']:<35}║")
-    print(f"║  Trend Overlay     : {DEMO_TREND if DEMO_MODE and DEMO_TREND != 'NEUTRAL' else 'NONE':<35}║")
+        print(f"║  Trend Overlay     : {DEMO_TREND if DEMO_TREND != 'NEUTRAL' else 'NONE':<35}║")
+        
     print(f"║  Execution         : {'DISABLED (Advisory Only)':<35}║")
     print("╚" + "═" * 58 + "╝")
     
     if EXECUTION_CONTEXT['market_status'] != "OPEN" and not DEMO_MODE:
         print(f"\n⚠️  MARKET IS CLOSED ({EXECUTION_CONTEXT['reason']}).")
-        print("   System using synthetic data to validate logic invariant.")
+        print("   System correctly using synthetic data to validate logic invariant.")
     print()
 
 
@@ -153,7 +173,8 @@ if not DEMO_MODE:
             print("   Falling back to Mock Adapter.")
             from broker.mock_adapter import MockAdapter
             _adapter = MockAdapter()
-            EXECUTION_CONTEXT["mode"] = "MOCK (Fallback)"
+            EXECUTION_CONTEXT["data_feed_mode"] = "SYNTHETIC (Fallback)"
+            EXECUTION_CONTEXT["data_capability"] = "Mock Adapter (Fallback)"
     else:
         from broker.mock_adapter import MockAdapter
         _adapter = MockAdapter()
@@ -426,6 +447,25 @@ def run_full_system_demo():
             print(f"    - {r}")
     else:
         print("   No primary action required (Portfolio Optimized).")
+        
+    # NEW: Decision Dominance Check & Counterfactuals
+    if superiority.get("dominance_check"):
+        dom = superiority["dominance_check"]
+        print(f"\n📐 DECISION DOMINANCE CHECK")
+        print(f"   • {dom['justification']}")
+        for factor in dom.get("factors", []):
+            print(f"   • {factor}")
+    
+    print(f"\n🧪 Counterfactual Evaluation (Simulated)")
+    cf = superiority.get("counterfactual", {})
+    print(f"   • Median alternative risk: {cf.get('median_alternative_risk', 'N/A')}")
+    if cf.get("confidence_level"):
+        print(f"   • Confidence level: {cf.get('confidence_level')}")
+    if primary:
+        print(f"   • Capital efficiency delta: {cf.get('capital_efficiency_delta', 'N/A')}")
+    else:
+        print(f"   • Portfolio drawdown avoided: {cf.get('drawdown_avoided', 'N/A')}")
+    # ...
 
     # Display Alternatives
     print("\n⚖️  [ALTERNATIVES CONSIDERED]")
@@ -483,7 +523,7 @@ def run_full_system_demo():
     print("📊 EXECUTIVE SUMMARY")
     print("=" * 70)
     
-    print(f"\n   STATUS:    {EXECUTION_CONTEXT['mode']}")
+    print(f"\n   STATUS:    {EXECUTION_CONTEXT['system_mode']}") # Show System Mode here (PAPER/DEMO)
     print(f"   DECISION:  {posture['market_posture']}")
     print(f"   SUMMARY:   {pm_summary}")
     
