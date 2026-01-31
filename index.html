@@ -1,57 +1,43 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Trading System Status - Phase 1</title>
-  </head>
-  <body>
-    <h1>System Status Dashboard (Phase 1)</h1>
 
-    <!-- Market Data Section -->
-    <div id="market-section">
-      <h2>Market Data Status</h2>
-      <p>Current Status: <span id="market-status">Checking...</span></p>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio Intelligence System | AI Agent Demo</title>
+  <meta name="description" content="Explainable AI Agent for Portfolio Decisions - Watch the agent think step-by-step.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-content">
+      <h1 class="header-title">Portfolio Intelligence System</h1>
+      <p class="header-subtitle">Explainable AI Agent for Portfolio Decisions</p>
+      <div class="controls">
+        <span id="data-source" class="data-source">🔌 Ready to connect</span>
+        <button id="run-btn" class="btn-primary">Run Full Analysis</button>
+      </div>
     </div>
+  </header>
 
-    <hr />
-
-    <!-- Portfolio Section -->
-    <div id="portfolio-section">
-      <h2>Portfolio Status</h2>
-      <p>Current Status: <span id="portfolio-status">Checking...</span></p>
+  <!-- MAIN PIPELINE -->
+  <main class="pipeline-container" id="pipeline">
+    <!-- Steps will be injected by JavaScript -->
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">🧠</div>
+      <p class="empty-text">Click <strong>Run Full Analysis</strong> to execute the Python AI engine.</p>
+      <p class="empty-hint">Ensure Flask backend is running: <code>python backend/app.py</code></p>
     </div>
+  </main>
 
-    <hr />
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>Portfolio Intelligence System &copy; 2026 | Powered by Python Decision Engine</p>
+  </footer>
 
-    <!-- News Section -->
-    <div id="news-section">
-      <h2>News Status</h2>
-      <p>Current Status: <span id="news-status">Checking...</span></p>
-    </div>
+  <script src="script.js"></script>
+</body>
 
-    <hr />
-
-    <!-- Phase 2: Signals Logic (Placeholders) -->
-
-    <!-- Volatility Section -->
-    <div id="volatility-section">
-      <h2>Volatility State</h2>
-      <p>Signal: <span id="volatility-state">...</span></p>
-    </div>
-
-    <!-- News Score Section -->
-    <div id="news-score-section">
-      <h2>News Score</h2>
-      <p>Signal: <span id="news-score">...</span></p>
-    </div>
-
-    <!-- Sector Confidence Section -->
-    <div id="sector-confidence-section">
-      <h2>Sector Confidence</h2>
-      <p>Signal: <span id="sector-confidence">...</span></p>
-    </div>
-
-    <script src="script.js"></script>
-  </body>
 </html>
