@@ -702,6 +702,192 @@ body {
     font-weight: 500;
     margin-top: var(--space-xs);
 }
+
+/* =============================================================================
+   DATA SOURCE STATUS BAR
+   ============================================================================= */
+.data-source-bar {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #ffffff;
+    padding: var(--space-sm) var(--space-xl);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    font-size: 0.8125rem;
+    border-bottom: 2px solid var(--accent-blue);
+}
+
+.data-source-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.data-source-label {
+    color: #8b949e;
+    font-weight: 500;
+}
+
+.data-source-value {
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.data-source-value.market-status {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.data-source-value.market-status.open {
+    background: var(--status-positive);
+    color: white;
+}
+
+.data-source-value.market-status.closed {
+    background: var(--status-warning);
+    color: white;
+}
+
+.data-source-value.data-mode {
+    background: rgba(9, 105, 218, 0.3);
+    color: #58a6ff;
+}
+
+.data-source-value.data-mode.live {
+    background: rgba(26, 127, 55, 0.3);
+    color: #3fb950;
+}
+
+.data-source-value.data-mode.historical {
+    background: rgba(154, 103, 0, 0.3);
+    color: #f0883e;
+}
+
+.data-source-value.data-source {
+    color: #c9d1d9;
+}
+
+.data-source-separator {
+    color: #484f58;
+    margin: 0 var(--space-xs);
+}
+
+.data-source-message {
+    font-style: italic;
+    color: #f0883e;
+    font-size: 0.75rem;
+    max-width: 500px;
+}
+
+/* =============================================================================
+   MARKET-AWARE CONTROLS
+   ============================================================================= */
+.market-aware-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding-right: var(--space-md);
+    border-right: 1px solid var(--border-light);
+    margin-right: var(--space-md);
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.control-label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.symbol-selector,
+.time-range-selector {
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-medium);
+    background: var(--bg-white);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-width: 100px;
+}
+
+.symbol-selector:hover,
+.time-range-selector:hover {
+    border-color: var(--accent-blue);
+}
+
+.symbol-selector:focus,
+.time-range-selector:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.2);
+}
+
+.symbol-selector:disabled,
+.time-range-selector:disabled {
+    background: var(--bg-subtle);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.control-group.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.control-group.disabled .control-label::after {
+    content: " (Live Mode)";
+    font-style: italic;
+    text-transform: none;
+}
+
+/* =============================================================================
+   DATA INFO PANEL
+   ============================================================================= */
+.data-info-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-md);
+}
+
+.data-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.data-info-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.data-info-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
 /* =============================================================================
    SCENARIO & BEHAVIOR VISUALIZATION
    ============================================================================= */
@@ -766,4 +952,41 @@ body {
     border-radius: 20px;
     font-size: 12px;
     font-weight: 500;
+}
+
+/* =============================================================================
+   RESPONSIVE ADJUSTMENTS FOR DATA SOURCE BAR
+   ============================================================================= */
+@media (max-width: 768px) {
+    .data-source-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: var(--space-md);
+    }
+    
+    .data-source-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-xs);
+    }
+    
+    .data-source-separator {
+        display: none;
+    }
+    
+    .market-aware-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        border-right: none;
+        border-bottom: 1px solid var(--border-light);
+        padding-right: 0;
+        padding-bottom: var(--space-md);
+        margin-right: 0;
+        margin-bottom: var(--space-md);
+        width: 100%;
+    }
+    
+    .data-info-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
