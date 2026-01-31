@@ -149,21 +149,44 @@ A **News Headline** represents a single news item for sentiment analysis.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      decision_engine.py                         │
-│         (Orchestrator: Combines all modules below)              │
+│                      full_system_demo.py                         │
+│         (Entry Point: Runs complete pipeline)                    │
 └───────┬─────────────┬─────────────┬─────────────┬───────────────┘
         │             │             │             │
         ▼             ▼             ▼             ▼
 ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-│vitals_monitor │ │capital_lock_in│ │opportunity_   │ │concentration_ │
-│     .py       │ │    .py        │ │ scanner.py    │ │   guard.py    │
-│               │ │               │ │               │ │               │
-│ Input:        │ │ Input:        │ │ Input:        │ │ Input:        │
-│  - Position   │ │  - Portfolio  │ │  - Positions  │ │  - Positions  │
-│               │ │  - Positions  │ │  - Candidates │ │  - total_cap  │
-│               │ │  - Heatmap    │ │               │ │               │
+│ broker/       │ │ demo/         │ │decision_engine│ │risk_guardrails│
+│ alpaca_adapter│ │ demo_profiles │ │    .py        │ │    .py        │
+│ mock_adapter  │ │ trend_overlays│ │               │ │               │
+└───────────────┘ └───────────────┘ └───────┬───────┘ └───────────────┘
+                                            │
+        ┌───────────────────────────────────┤
+        ▼             ▼             ▼       ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│position_vitals│ │capital_lock_in│ │opportunity_   │ │concentration_ │
+│     .py       │ │    .py        │ │ logic.py      │ │   guard.py    │
 └───────────────┘ └───────────────┘ └───────────────┘ └───────────────┘
+        │
+        ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│volatility_    │ │ news_scorer   │ │sector_        │
+│ metrics.py    │ │    .py        │ │ confidence.py │
+└───────────────┘ └───────────────┘ └───────────────┘
 ```
+
+### New Modules (v2.0)
+
+| Module | Purpose |
+|--------|---------|
+| `broker/alpaca_adapter.py` | READ-ONLY Alpaca paper trading client |
+| `broker/mock_adapter.py` | Mock data generator for testing |
+| `demo/demo_profiles.py` | Hardcoded portfolio profiles for demos |
+| `demo/trend_overlays.py` | Signal modifiers (TECH_COOLING, VOLATILITY_SHOCK) |
+| `risk_guardrails.py` | Safety filtering (concentration, cash, volatility) |
+| `execution_planner.py` | Converts decisions to sequential plan |
+| `execution_summary.py` | Final reporting layer |
+| `backend/app.py` | Flask REST API |
+| `tests/test_system.py` | Comprehensive test suite |
 
 ---
 
