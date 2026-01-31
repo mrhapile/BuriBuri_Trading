@@ -4,47 +4,48 @@
  */
 
 // Simulated State (Booleans)
+// Simulated State (Booleans for Phase 1, Values for Phase 2)
 const systemState = {
+    // Phase 1 (Data Status)
     marketDataLoaded: false,
     portfolioLoaded: false,
-    newsLoaded: false
+    newsLoaded: false,
+    
+    // Phase 2 (Signals - Static Mocks)
+    volatilityState: "MODERATE",
+    newsScore: "NEUTRAL",
+    sectorConfidence: "LOW"
 };
 
-// DOM Elements
+// DOM Elements - Phase 1
 const marketStatusEl = document.getElementById('market-status');
 const portfolioStatusEl = document.getElementById('portfolio-status');
 const newsStatusEl = document.getElementById('news-status');
+
+// DOM Elements - Phase 2
+const volatilityStateEl = document.getElementById('volatility-state');
+const newsScoreEl = document.getElementById('news-score');
+const sectorConfidenceEl = document.getElementById('sector-confidence');
 
 /**
  * Updates the UI based on the current systemState.
  * Simple text toggle based on boolean values.
  */
 function updateUI() {
-    // Market Data
-    if (systemState.marketDataLoaded) {
-        marketStatusEl.innerText = "Data Loaded";
-    } else {
-        marketStatusEl.innerText = "Not Loaded";
-    }
+    // Phase 1: Data Status
+    marketStatusEl.innerText = systemState.marketDataLoaded ? "Data Loaded" : "Not Loaded";
+    portfolioStatusEl.innerText = systemState.portfolioLoaded ? "Data Loaded" : "Not Loaded";
+    newsStatusEl.innerText = systemState.newsLoaded ? "Data Loaded" : "Not Loaded";
 
-    // Portfolio
-    if (systemState.portfolioLoaded) {
-        portfolioStatusEl.innerText = "Data Loaded";
-    } else {
-        portfolioStatusEl.innerText = "Not Loaded";
-    }
-
-    // News
-    if (systemState.newsLoaded) {
-        newsStatusEl.innerText = "Data Loaded";
-    } else {
-        newsStatusEl.innerText = "Not Loaded";
-    }
+    // Phase 2: Signals (Display Static Values)
+    volatilityStateEl.innerText = systemState.volatilityState;
+    newsScoreEl.innerText = systemState.newsScore;
+    sectorConfidenceEl.innerText = systemState.sectorConfidence;
 }
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("Phase 1 Frontend Initialized");
+    console.log("Phase 1 & 2 Frontend Initialized");
     updateUI();
 });
 
