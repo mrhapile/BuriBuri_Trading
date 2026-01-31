@@ -227,9 +227,18 @@ class AlpacaAdapter:
             
             return candles
             
-        except Exception as e:
-            # Return empty if data fetch fails
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 403:
+                # Common for free tier paper accounts without active data subscription
+                print(f"[Alpaca] Note: Real-time market data access restricted (403). using synthetic fallback.")
+                return []
             print(f"[Alpaca] Warning: Could not fetch candles for {symbol}: {e}")
+            return []
+        except requests.exceptions.RequestException as e:
+            print(f"[Alpaca] Warning: Network/API error for {symbol}: {e}")
+            return []
+        except Exception as e:
+            print(f"[Alpaca] Error: Unexpected error fetching candles: {e}")
             return []
     
     def _compute_simple_atr(self, candles: List[Dict], period: int = 14) -> float:
