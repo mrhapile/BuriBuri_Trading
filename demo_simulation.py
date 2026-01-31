@@ -42,15 +42,17 @@ def fetch_sector_candles(sector: str, limit: int = 5):
 
 def fetch_portfolio_snapshot():
     """
-    Simulates fetching the current portfolio state.
-    Returns a dictionary adhering to the project data contracts.
+    Mock Alpaca Adapter that simulates a portfolio snapshot.
+    This adapter exists to unblock Phase 2 & Phase 3.
+    It preserves the final architecture and is easily replaceable.
     """
-    print("[*] Fetching portfolio snapshot...")
-    
     return {
-        "total_capital": 1000000.0,
-        "used_capital": 850000.0,  # Note: Reserved usage
-        "cash": 150000.0
+        "total_capital": 100000,
+        "cash": 25000,
+        "positions": [
+            {"symbol": "AAPL", "market_value": 30000},
+            {"symbol": "MSFT", "market_value": 45000}
+        ]
     }
 
 def fetch_sector_news(sector: str):
