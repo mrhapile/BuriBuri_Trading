@@ -337,14 +337,19 @@ def run_demo_scenario(scenario_id=None):
         execution_context=EXECUTION_CONTEXT # Pass context
     )
     
-    # Generate Output
-    return decision_report # Return full report which now includes summary
     # Extract components
     posture = decision_report.get("market_posture", {})
     safe_decisions = decision_report.get("decisions", [])
     blocked_decisions = decision_report.get("blocked_by_safety", [])
     concentration_risk = decision_report.get("concentration_risk", {})
-    
+
+    # Calculate Avg Vitals from Decisions for UI
+    pos_scores = [d["score"] for d in safe_decisions if d["type"] == "POSITION"]
+    if pos_scores:
+        avg_vitals = int(sum(pos_scores) / len(pos_scores))
+    else:
+        avg_vitals = 0
+
     # Generate Execution Plan
     if safe_decisions:
         simulated_decision_input = {"decision": posture.get("market_posture", "NEUTRAL")}
@@ -364,7 +369,7 @@ def run_demo_scenario(scenario_id=None):
     # Return JSON-safe structure for UI
     return {
         # Phase 2 Signals
-        "phase2": {
+        "signals": {
             "volatility_state": vol_state,
             "volatility_explanation": "Volatility contracting, risk subsiding",
             "news_score": news_score_val,
@@ -386,7 +391,14 @@ def run_demo_scenario(scenario_id=None):
             "candles": len(candles),
             "headlines": len(headlines)
         },
-        "scenario_meta": scenario
+        "scenario_meta": scenario,
+        # Portfolio Health (NEW)
+        "portfolio": {
+            "position_count": len(positions),
+            "avg_vitals": avg_vitals,
+            "capital_lockin": "DETECTED" if decision_report.get("reallocation_trigger") else "NONE",
+            "concentration_risk": "HIGH" if concentration_risk.get("is_concentrated") else "LOW"
+        }
     }
 
 
