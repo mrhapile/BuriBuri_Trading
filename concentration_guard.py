@@ -26,7 +26,7 @@ Integration Points:
 Author: Quantitative Portfolio Engineering Team
 """
 
-from typing import TypedDict
+from typing import TypedDict, Optional
 
 
 # =============================================================================
@@ -59,7 +59,7 @@ class ConcentrationWarning(TypedDict):
         severity: Risk level - "OK", "APPROACHING", or "SOFT_BREACH"
     """
     is_concentrated: bool
-    dominant_sector: str | None
+    dominant_sector: Optional[str]
     exposure: float
     threshold: float
     severity: str
@@ -166,7 +166,7 @@ def compute_sector_exposure(
 
 def evaluate_concentration_risk(
     exposure_map: dict[str, float],
-    thresholds: dict[str, float] | None = None
+    thresholds: Optional[dict[str, float]] = None
 ) -> ConcentrationWarning:
     """
     Evaluate concentration risk based on sector exposures.
@@ -246,7 +246,7 @@ def evaluate_concentration_risk(
 def analyze_portfolio_concentration(
     positions: list[dict],
     total_capital: float,
-    thresholds: dict[str, float] | None = None
+    thresholds: Optional[dict[str, float]] = None
 ) -> ConcentrationAnalysis:
     """
     Main API: Analyze portfolio for sector concentration risk.
