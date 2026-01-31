@@ -23,15 +23,69 @@ The system should:
 
 Focus is on reasoning and adaptability, not fixed strategies, single indicators, or simple buy/sell bots.
 
-### How to Start (Suggested Features)
+## Implemented Solution (MVP)
 
-Teams may begin with a small set of core ideas, such as:
+The current repository contains a fully working **Advisory Portfolio Pilot** that demonstrates agentic reasoning for capital allocation. It is not a trading bot (it does not execute trades), but rather a deterministic decision engine that monitors portfolio health and suggests actions.
 
-- Tracking open positions and estimating their current risk and potential return
-- Deciding whether to hold, reduce, exit, or reallocate capital as new opportunities emerge
-- Managing capital and risk across multiple positions rather than treating each trade independently
+### 1. Key Logic Modules
 
-These are starting points only. Teams are encouraged to expand, refine, or rethink the approach to better reflect real trading behavior.
+The system is composed of five specialized, independent logic modules:
+
+- **Portfolio Vitals Monitor** (`vitals_monitor.py`)
+  - **Purpose:** acts as the "health check" for individual positions.
+  - **Logic:** Calculates a `Vitals Score` (0-100) based on volatility-adjusted returns, capital efficiency, and time decay (penalizing stagnation).
+  - **Output:** Classifies positions as `HEALTHY`, `WEAK`, or `UNHEALTHY`.
+
+- **Capital Lock-in Detector** (`capital_lock_in.py`)
+  - **Purpose:** Identifies "Zombie Positions"—capital trapped in low-performing assets within cold sectors.
+  - **Logic:** Cross-references Vitals Scores with a Sector Heatmap. If a position is weak AND the sector is cold, it is flagged as `Dead Capital`.
+  - **Output:** Triggers a `REALLOCATION REQUIRED` alert if dead capital exceeds a pressure threshold.
+
+- **Sector Concentration Guard** (`concentration_guard.py`)
+  - **Purpose:** Managing risk by preventing over-exposure to a single sector.
+  - **Logic:** Calculates the % of total capital in each sector.
+  - **Output:** distinct warnings: `APPROACHING` (warning limit) or `SOFT_BREACH` (soft limit). _Note: This is advisory only._
+
+- **Opportunity Scanner** (`opportunity_scanner.py`)
+  - **Purpose:** Finds better uses for capital.
+  - **Logic:** Compares the portfolio's "weakest link" (lowest vitals) against external market candidates (projected efficiency).
+  - **Output:** Recommends a swap only if the `Efficiency Gap` > Threshold (e.g., +15 points).
+
+- **Decision Orchestration** (`decision_engine.py`)
+  - **Purpose:** The central brain that synthesizes all signals.
+  - **Logic:** Runs the Vitals Monitor -> Checks Lock-ins -> Scans Opportunities -> Formulates a final Plan.
+  - **Output:** A structured list of human-readable decisions (e.g., `OLD_BANK → REDUCE`).
+
+### 2. How it Works (Flow Overview)
+
+The system operates in discrete time steps (e.g., T0, T1, T2) to simulate evolving market conditions.
+
+1.  **Ingest State:** Reads current portfolio holdings and market heatmaps.
+2.  **Analyze Health:** Every position is scored for efficiency.
+3.  **Check Constraints:** Guards check for concentration risks or dead capital.
+4.  **Synthesize Advice:** The engine generates specific actions for each asset.
+    - _Stable?_ → `MAINTAIN`
+    - _Stagnant?_ → `REVIEW`
+    - _Critical Decay?_ → `REDUCE` / `FREE_CAPITAL`
+    - _Opportunity?_ → `ALLOCATE`
+
+### 3. Current System Output
+
+The system produces clean, CLI-based text tailored for human decision-makers. It avoids technical jargon in favor of clear reasoning.
+
+**Example Output:**
+
+```text
+[11:00 AM | T0]
+OLD_BANK → HOLD
+Reason: Capital still productive
+
+[11:05 AM | T1]
+OLD_BANK → REDUCE
+Reason: Low efficiency, cold sector
+
+Portfolio Alert → REALLOCATION REQUIRED
+```
 
 ## Team Members
 
