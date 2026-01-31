@@ -21,6 +21,7 @@ import decision_engine
 import execution_planner
 import risk_guardrails
 import execution_summary
+from backend.scenarios import get_scenario
 
 # =============================================================================
 # DATA SOURCE CONFIGURATION
@@ -205,7 +206,7 @@ def get_market_data():
 # API-COMPATIBLE OUTPUT FUNCTION (NO PRINTING)
 # =============================================================================
 
-def run_demo_scenario():
+def run_demo_scenario(scenario_id=None):
     """
     Returns full system output as JSON-safe dict.
     NO printing. NO side effects.
@@ -280,11 +281,36 @@ def run_demo_scenario():
     
     conf_res = sector_confidence.compute_sector_confidence(vol_state, news_score_val)
     confidence_val = conf_res["sector_confidence"]
+
+    # =========================================================
+    # SCENARIO INJECTION: OVERRIDE MOCK INPUTS
+    # =========================================================
+    scenario = get_scenario(scenario_id) if scenario_id else {}
+    overrides = scenario.get("override_inputs", {})
     
+    if overrides:
+        if "positions" in overrides:
+            positions = overrides["positions"]
+        if "candidates" in overrides:
+            candidates = overrides["candidates"]
+        if "volatility_state" in overrides:
+            vol_state = overrides["volatility_state"]
+        if "news_score" in overrides:
+            news_score_val = overrides["news_score"]
+        if "sector_confidence" in overrides:
+            confidence_val = overrides["sector_confidence"]
+            
     market_context = {
         "candles": candles,
         "news": headlines
     }
+    
+    if "volatility_state" in overrides:
+        market_context["override_volatility"] = overrides["volatility_state"]
+    if "news_score" in overrides:
+        market_context["override_news_score"] = overrides["news_score"]
+    if "sector_confidence" in overrides:
+        market_context["override_confidence"] = overrides["sector_confidence"]
     
     # Run Decision Engine
     decision_report = decision_engine.run_decision_engine(
@@ -341,7 +367,8 @@ def run_demo_scenario():
             "positions": len(positions),
             "candles": len(candles),
             "headlines": len(headlines)
-        }
+        },
+        "scenario_meta": scenario
     }
 
 

@@ -128,28 +128,37 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     
     if market_context:
         # A. Volatility
-        candles = market_context.get("candles", [])
-        if candles:
-            # Assume baseline is hardcoded or provided. For now, we compute current ATR.
-            # Real implementation would track baseline. We'll use a dummy baseline for demo logic.
-            atr_res = volatility_metrics.compute_atr(candles)
-            if atr_res["atr"]:
-                # Mock baseline: slightly lower than current to simulate slight expansion, or use avg
-                # For deterministic logical testing, let's assume baseline is close to current
-                baseline = atr_res["atr"] # No change
-                vol_res = volatility_metrics.classify_volatility_state(atr_res["atr"], baseline)
-                vol_state = vol_res["volatility_state"]
+        if "override_volatility" in market_context:
+            vol_state = market_context["override_volatility"]
+        else:
+            candles = market_context.get("candles", [])
+            if candles:
+                # Assume baseline is hardcoded or provided. For now, we compute current ATR.
+                # Real implementation would track baseline. We'll use a dummy baseline for demo logic.
+                atr_res = volatility_metrics.compute_atr(candles)
+                if atr_res["atr"]:
+                    # Mock baseline: slightly lower than current to simulate slight expansion, or use avg
+                    # For deterministic logical testing, let's assume baseline is close to current
+                    baseline = atr_res["atr"] # No change
+                    vol_res = volatility_metrics.classify_volatility_state(atr_res["atr"], baseline)
+                    vol_state = vol_res["volatility_state"]
         
         # B. News
-        headlines = market_context.get("news", [])
-        if headlines:
-            # Extract strings if dicts provided
-            headline_strs = [h["title"] if isinstance(h, dict) else h for h in headlines]
-            news_res = news_scorer.score_tech_news(headline_strs)
+        if "override_news_score" in market_context:
+            news_res = {"news_score": market_context["override_news_score"]}
+        else:
+            headlines = market_context.get("news", [])
+            if headlines:
+                # Extract strings if dicts provided
+                headline_strs = [h["title"] if isinstance(h, dict) else h for h in headlines]
+                news_res = news_scorer.score_tech_news(headline_strs)
 
     # C. Confidence
-    conf_res = sector_confidence.compute_sector_confidence(vol_state, news_res["news_score"])
-    confidence_score = conf_res["sector_confidence"]
+    if market_context and "override_confidence" in market_context:
+        confidence_score = market_context["override_confidence"]
+    else:    
+        conf_res = sector_confidence.compute_sector_confidence(vol_state, news_res["news_score"])
+        confidence_score = conf_res["sector_confidence"]
 
     # ---------------------------------------------------------
     # 2. POSITIONS ANALYSIS (The Vitals Monitor)

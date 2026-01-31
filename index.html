@@ -22,6 +22,16 @@
       <p class="tagline">Explainable, Risk-Aware Portfolio Decisions</p>
     </div>
     <div class="header-actions">
+      <div class="scenario-controls">
+        <select id="scenario-selector" class="scenario-selector">
+          <option value="NORMAL">Normal Operation</option>
+          <option value="crash_reflex">🚨 The Crash Reflex</option>
+          <option value="concentration_guard">🛡️ The Concentration Guard</option>
+          <option value="disciplined_observer">👀 The Disciplined Observer</option>
+          <option value="dead_capital">♻️ The Dead Capital Rotator</option>
+          <option value="greedy_trap">🪤 The Greedy Trap</option>
+        </select>
+      </div>
       <span class="status-badge" id="status-badge">Ready</span>
       <button class="btn-run" id="run-btn">Run Analysis</button>
     </div>
@@ -34,6 +44,7 @@
     <!-- Market Overview Panel -->
     <section class="panel" id="market-panel">
       <h2 class="panel-title">Market Overview</h2>
+      <div id="scenario-badges" class="scenario-badges"></div>
       <div class="metrics-grid">
         <div class="metric-card" id="posture-card">
           <span class="metric-label">Market Posture</span>

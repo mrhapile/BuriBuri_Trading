@@ -11,7 +11,7 @@ import os
 # Add parent directory to path to import project modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from full_system_demo import run_demo_scenario
 
 api = Blueprint("api", __name__)
@@ -26,7 +26,12 @@ def run_agent():
     This is a READ-ONLY endpoint. No side effects.
     """
     try:
-        result = run_demo_scenario()
+        # Get scenario from query param (default None)
+        scenario = request.args.get("scenario")
+        if scenario == "NORMAL" or scenario == "":
+            scenario = None
+            
+        result = run_demo_scenario(scenario_id=scenario)
         return jsonify(result)
     except Exception as e:
         return jsonify({

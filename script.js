@@ -10,8 +10,8 @@
 // =============================================================================
 
 const CONFIG = {
-    API_BASE: 'http://127.0.0.1:5000',
-    MOCK_MODE: true,  // Set to false when backend is running
+    API_BASE: 'http://127.0.0.1:5001',
+    MOCK_MODE: false,  // Set to false when backend is running
 };
 
 // =============================================================================
@@ -169,6 +169,33 @@ const elements = {
 function setStatus(status, text) {
     elements.statusBadge.className = 'status-badge ' + status;
     elements.statusBadge.textContent = text;
+}
+
+/**
+ * Render Scenario Badges and Description
+ */
+function updateScenarioBadges(data) {
+    const container = document.getElementById('scenario-badges');
+    if (!container) return;
+
+    const scenario = data.scenario_meta || {};
+
+    if (scenario.badges && scenario.badges.length > 0) {
+        const badgesHtml = scenario.badges.map(b =>
+            `<span class="scenario-badge">✔ ${b}</span>`
+        ).join('');
+
+        let descHtml = '';
+        if (scenario.description) {
+            descHtml = `<div class="scenario-desc">${scenario.header_emoji || ''} ${scenario.description}</div>`;
+        }
+
+        container.innerHTML = descHtml + `<div class="badges-row">${badgesHtml}</div>`;
+        container.classList.add('visible');
+    } else {
+        container.innerHTML = '';
+        container.classList.remove('visible');
+    }
 }
 
 /**
@@ -344,7 +371,10 @@ async function fetchAnalysis() {
         return MOCK_DATA;
     }
 
-    const response = await fetch(`${CONFIG.API_BASE}/run`, {
+    const selector = document.getElementById("scenario-selector");
+    const scenario = selector ? selector.value : "NORMAL";
+
+    const response = await fetch(`${CONFIG.API_BASE}/run?scenario=${scenario}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
     });
@@ -372,6 +402,7 @@ async function runAnalysis() {
 
         // Update all panels
         updateMarketOverview(data);
+        updateScenarioBadges(data);
         updatePortfolioHealth(data);
         renderDecisions(data.decisions);
         renderWarnings(data.warnings);
