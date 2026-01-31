@@ -22,6 +22,7 @@ import execution_planner
 import risk_guardrails
 import execution_summary
 import market_mode
+from backend import market_status
 from backend.scenarios import get_scenario
 
 # =============================================================================
@@ -258,12 +259,18 @@ def get_market_data():
 # API-COMPATIBLE OUTPUT FUNCTION (NO PRINTING)
 # =============================================================================
 
-def run_demo_scenario(scenario_id=None):
+def run_demo_scenario(scenario_id=None, symbol=None):
     """
     Returns full system output as JSON-safe dict.
     NO printing. NO side effects.
     """
-    # Mock Data (Same as demo) - Keep consistent with demo scenario
+    # 1. Market Status
+    status = market_status.get_market_status()
+    is_open = status["is_open"]
+    data_mode = "MOCK"
+    portfolio_source = "MOCK"
+    
+    # 2. default/Fallback Data
     portfolio = {
         "total_capital": 1_000_000.0,
         "cash": 150_000.0,
@@ -282,20 +289,36 @@ def run_demo_scenario(scenario_id=None):
         {"symbol": "MORE_TECH", "sector": "TECH", "projected_efficiency": 68.0}
     ]
     
-    # Compute Signals
     candles = [{"timestamp": f"2026-01-31T10:{i:02d}:00Z", "high": 100+i, "low": 98+i, "close": 99+i} for i in range(20)]
     headlines = ["Tech sector sees steady demand growth"]
-    
-    market_context = {"candles": candles, "news": headlines}
-    atr_res = volatility_metrics.compute_atr(candles)
-    vol_res = volatility_metrics.classify_volatility_state(current_atr=2.0, baseline_atr=2.5)
-    vol_state = vol_res["volatility_state"]
-    
-    news_res = news_scorer.score_tech_news(headlines)
-    news_score_val = news_res["news_score"]
-    
-    conf_res = sector_confidence.compute_sector_confidence(vol_state, news_score_val)
-    confidence_val = conf_res["sector_confidence"]
+
+    # 3. Data Strategy Switch
+    if not scenario_id and USE_ALPACA and _adapter:
+        if is_open:
+            # LIVE MODE
+            data_mode = "LIVE"
+            portfolio_source = "ALPACA"
+            try:
+                portfolio = _adapter.get_portfolio()
+                positions = _adapter.get_positions()
+                # candidates/heatmap defaults from adapter
+                target = symbol or "SPY"
+                candles = _adapter.get_recent_candles(target, limit=20, timeframe="1Min")
+                headlines = _adapter.get_headlines()
+            except Exception as e:
+                print(f"⚠️ Live Data Fetch Error: {e}")
+        else:
+            # HISTORICAL MODE
+            data_mode = "HISTORICAL"
+            portfolio_source = "HISTORICAL_SCENARIO"
+            # Keep synthetic positions, but fetch historical candles for analysis
+            target = symbol or "NVDA"
+            try:
+                fetched = _adapter.get_recent_candles(target, limit=20, timeframe="1Day")
+                if fetched:
+                    candles = fetched
+            except Exception as e:
+                print(f"⚠️ Historical Data Fetch Error: {e}")
 
     # =========================================================
     # SCENARIO INJECTION: OVERRIDE MOCK INPUTS
@@ -304,16 +327,50 @@ def run_demo_scenario(scenario_id=None):
     overrides = scenario.get("override_inputs", {})
     
     if overrides:
+        data_mode = "SCENARIO"
         if "positions" in overrides:
             positions = overrides["positions"]
         if "candidates" in overrides:
             candidates = overrides["candidates"]
-        if "volatility_state" in overrides:
-            vol_state = overrides["volatility_state"]
-        if "news_score" in overrides:
-            news_score_val = overrides["news_score"]
-        if "sector_confidence" in overrides:
-            confidence_val = overrides["sector_confidence"]
+        # ... other overrides handled below ...
+
+    # =========================================================
+    # COMPUTE DEFAULT SIGNALS (FROM DATA)
+    # =========================================================
+    # We compute these so we have values for Normal Mode (Live/Historical)
+    # If Scenarios are active, these will be overwritten.
+    
+    # Volatility
+    atr_res = volatility_metrics.compute_atr(candles)
+    # Use a dynamic baseline if possible, else fixed for demo stability
+    baseline_atr = 2.5 
+    if atr_res["atr"]:
+        vol_res = volatility_metrics.classify_volatility_state(atr_res["atr"], baseline_atr)
+        default_vol_state = vol_res["volatility_state"]
+    else:
+        default_vol_state = "STABLE"
+        
+    # News
+    news_res = news_scorer.score_tech_news(headlines)
+    default_news_score = news_res["news_score"]
+    
+    # Confidence
+    conf_res = sector_confidence.compute_sector_confidence(default_vol_state, default_news_score)
+    default_confidence = conf_res["sector_confidence"]
+
+    # =========================================================
+    # APPLY OVERRIDES
+    # =========================================================
+    vol_state = default_vol_state
+    news_score_val = default_news_score
+    confidence_val = default_confidence
+    
+    if "volatility_state" in overrides:
+        vol_state = overrides["volatility_state"]
+    if "news_score" in overrides:
+        news_score_val = overrides["news_score"]
+    if "sector_confidence" in overrides:
+        confidence_val = overrides["sector_confidence"]
             
     market_context = {
         "candles": candles,
@@ -366,16 +423,16 @@ def run_demo_scenario(scenario_id=None):
     }
     summary = execution_summary.generate_execution_summary(summary_context)
     
-    # Return JSON-safe structure for UI
-    return {
+    # Analysis Result
+    analysis_result = {
         # Phase 2 Signals
         "signals": {
-            "volatility_state": vol_state,
-            "volatility_explanation": "Volatility contracting, risk subsiding",
-            "news_score": news_score_val,
-            "news_explanation": f"Processed {news_res['headline_count']} headlines",
-            "sector_confidence": confidence_val,
-            "confidence_explanation": "Combined signals indicate moderate confidence"
+            "volatility_state": vol_state or decision_report.get("market_posture", {}).get("reasons", ["UNKNOWN"])[0], # Fallback if not overridden
+            "volatility_explanation": "Processed from candles",
+            "news_score": news_score_val or 50,
+            "news_explanation": f"Processed {len(headlines)} headlines",
+            "sector_confidence": confidence_val or 50,
+            "confidence_explanation": "Combined signals"
         },
         # Phase 3 Decisions
         "market_posture": posture,
@@ -392,13 +449,22 @@ def run_demo_scenario(scenario_id=None):
             "headlines": len(headlines)
         },
         "scenario_meta": scenario,
-        # Portfolio Health (NEW)
+        # Portfolio Health
         "portfolio": {
             "position_count": len(positions),
             "avg_vitals": avg_vitals,
             "capital_lockin": "DETECTED" if decision_report.get("reallocation_trigger") else "NONE",
             "concentration_risk": "HIGH" if concentration_risk.get("is_concentrated") else "LOW"
         }
+    }
+    
+    # Wrap in API Contract
+    return {
+        "market_status": status,
+        "data_mode": data_mode,
+        "symbols_used": [symbol] if symbol else [],
+        "portfolio_source": portfolio_source,
+        "analysis": analysis_result
     }
 
 

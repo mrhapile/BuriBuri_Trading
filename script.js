@@ -361,6 +361,10 @@ function getWarningIcon(type) {
 // API COMMUNICATION
 // =============================================================================
 
+// =============================================================================
+// API COMMUNICATION
+// =============================================================================
+
 /**
  * Fetch analysis data from backend
  */
@@ -368,13 +372,20 @@ async function fetchAnalysis() {
     if (CONFIG.MOCK_MODE) {
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 800));
-        return MOCK_DATA;
+        return {
+            analysis: MOCK_DATA,
+            market_status: { label: "MOCK", is_open: false, timestamp: new Date().toISOString() },
+            data_mode: "MOCK"
+        };
     }
 
     const selector = document.getElementById("scenario-selector");
     const scenario = selector ? selector.value : "NORMAL";
 
-    const response = await fetch(`${CONFIG.API_BASE}/run?scenario=${scenario}`, {
+    const symbolInput = document.getElementById("symbol-input");
+    const symbol = symbolInput ? symbolInput.value : "";
+
+    const response = await fetch(`${CONFIG.API_BASE}/run?scenario=${scenario}&symbol=${symbol}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
     });
@@ -384,6 +395,45 @@ async function fetchAnalysis() {
     }
 
     return await response.json();
+}
+
+/**
+ * Update Market Status Badge and Message
+ */
+function updateMarketStatus(wrapper) {
+    if (!wrapper || !wrapper.market_status) return;
+
+    const status = wrapper.market_status;
+    const isClosed = !status.is_open;
+    const badge = document.getElementById('status-badge');
+
+    // Update Badge
+    if (badge) {
+        badge.textContent = status.label || (status.is_open ? "OPEN" : "CLOSED");
+        badge.className = 'status-badge ' + (status.is_open ? 'success' : 'danger');
+    }
+
+    // Show Historical Data Warning if Closed AND not already a scenario
+    // If it is a scenario (wrapper.data_mode == "SCENARIO"), that takes precedence.
+    const mode = wrapper.data_mode || "UNKNOWN";
+    const source = wrapper.portfolio_source || "UNKNOWN";
+
+    let message = "";
+    if (mode === "HISTORICAL") {
+        message = `Live Market Closed. Using Historical Data for ${wrapper.symbols_used?.[0] || 'Analysis'}.`;
+    } else if (mode === "LIVE") {
+        message = `Live Market Data. Connected to Alpaca & Polygon.`;
+    } else if (mode === "SCENARIO") {
+        message = "Scenario Simulation Active.";
+    }
+
+    // Inject message into header or overview
+    // We can use the existing 'scenario-badges' container if empty, or prepend to it
+    // Or just set the tooltip title of the badge?
+    if (badge) badge.title = message + ` \nSource: ${source}`;
+
+    // Also log to console for demo clarity
+    console.log(`[System] Mode: ${mode} | Status: ${status.label} | Source: ${source}`);
 }
 
 // =============================================================================
@@ -398,16 +448,30 @@ async function runAnalysis() {
         elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
 
         // Fetch data
-        const data = await fetchAnalysis();
+        const wrapper = await fetchAnalysis();
+        const data = wrapper.analysis || wrapper; // Fallback for safety
 
-        // Update all panels
+        // Update Market Status UI
+        updateMarketStatus(wrapper);
+
+        // Update all panels using appropriate data mapping
         updateMarketOverview(data);
         updateScenarioBadges(data);
         updatePortfolioHealth(data);
         renderDecisions(data.decisions);
-        renderWarnings(data.warnings);
 
-        // Update status
+        // Handle Warnings
+        // Analysis might have warnings, or we might add system warnings
+        const warnings = data.warnings || [];
+        if (wrapper.market_status && !wrapper.market_status.is_open && wrapper.data_mode === "HISTORICAL") {
+            warnings.unshift({
+                type: 'warning',
+                message: `Market is CLOSED. Using historical data (Polygon.io).`
+            });
+        }
+        renderWarnings(warnings);
+
+        // Update status text (bottom controller)
         setStatus('complete', 'Complete');
 
     } catch (error) {
@@ -417,7 +481,7 @@ async function runAnalysis() {
         // Show error in warnings
         renderWarnings([{
             type: 'danger',
-            message: `Failed to connect to backend. ${CONFIG.MOCK_MODE ? 'Using mock data.' : 'Ensure Flask is running.'}`
+            message: `Failed to connect to backend. ${CONFIG.MOCK_MODE ? 'Using mock data.' : 'Ensure Flask is running.'} (${error.message})`
         }]);
 
     } finally {
@@ -433,10 +497,6 @@ async function runAnalysis() {
 document.addEventListener('DOMContentLoaded', () => {
     // Bind run button
     elements.runBtn.addEventListener('click', runAnalysis);
-
-    // Auto-run on load for demo convenience
-    // Uncomment the line below to auto-run:
-    // runAnalysis();
 
     console.log('BuriBuri Trading UI initialized');
     console.log('Mock mode:', CONFIG.MOCK_MODE);

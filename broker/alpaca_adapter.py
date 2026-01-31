@@ -187,13 +187,14 @@ class AlpacaAdapter:
         
         return positions
     
-    def get_recent_candles(self, symbol: str = "SPY", limit: int = 20) -> List[Dict[str, Any]]:
+    def get_recent_candles(self, symbol: str = "SPY", limit: int = 20, timeframe: str = "1Day") -> List[Dict[str, Any]]:
         """
         Fetch recent OHLCV bars for ATR calculation.
         
         Args:
             symbol: Stock symbol
             limit: Number of bars
+            timeframe: '1Day', '1Hour', '1Min'
             
         Returns:
             list: Candle dicts with timestamp, high, low, close
@@ -204,7 +205,7 @@ class AlpacaAdapter:
         
         endpoint = (
             f"/v2/stocks/{symbol}/bars"
-            f"?timeframe=1Day"
+            f"?timeframe={timeframe}"
             f"&start={start.strftime('%Y-%m-%d')}"
             f"&end={end.strftime('%Y-%m-%d')}"
             f"&limit={limit}"

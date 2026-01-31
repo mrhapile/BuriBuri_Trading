@@ -28,10 +28,12 @@ def run_agent():
     try:
         # Get scenario from query param (default None)
         scenario = request.args.get("scenario")
+        symbol = request.args.get("symbol")
+        
         if scenario == "NORMAL" or scenario == "":
             scenario = None
             
-        result = run_demo_scenario(scenario_id=scenario)
+        result = run_demo_scenario(scenario_id=scenario, symbol=symbol)
         return jsonify(result)
     except Exception as e:
         return jsonify({

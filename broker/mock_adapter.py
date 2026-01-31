@@ -76,12 +76,14 @@ class MockAdapter:
             }
         ]
     
-    def get_recent_candles(self, symbol: str = "SPY", limit: int = 20) -> List[Dict[str, Any]]:
+    def get_recent_candles(self, symbol: str = "SPY", limit: int = 20, timeframe: str = "1Day") -> List[Dict[str, Any]]:
         """
         Returns mock OHLCV candles for ATR calculation.
         
         Args:
             symbol: Stock symbol (ignored in mock)
+            limit: Number of candles
+            timeframe: Timeframe (ignored in mock)
             limit: Number of candles
             
         Returns:
