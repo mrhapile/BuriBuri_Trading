@@ -1,7 +1,9 @@
-import vitals_monitor
+import position_vitals as vitals_monitor
 import capital_lock_in
 import opportunity_scanner
+import opportunity_logic
 import concentration_guard
+import risk_guardrails
 
 def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: dict, candidates: list) -> dict:
     """
@@ -59,7 +61,7 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     # ---------------------------------------------------------
     # 4. OPPORTUNITY SCANNER (Relative Efficiency)
     # ---------------------------------------------------------
-    opportunity_report = opportunity_scanner.scan_for_opportunities(
+    opportunity_report = opportunity_logic.scan_for_opportunities(
         analyzed_positions, 
         candidates
     )
@@ -173,8 +175,33 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
             "score": eff_score
         })
 
+
     # ---------------------------------------------------------
-    # 6. Final Report
+    # 6. RISK GUARDRAILS (Final Safety Gate)
+    # ---------------------------------------------------------
+    # Build risk context from already-computed signals
+    risk_context = {
+        "concentration": conc_warning,
+        "cash_available": float(portfolio_state.get("cash", 0.0)),
+        "minimum_reserve": 50000.0,  # Configurable threshold
+        "volatility_state": portfolio_state.get("volatility_state", "STABLE")  # Optional signal
+    }
+    
+    # Apply safety filters
+    guardrail_results = risk_guardrails.apply_risk_guardrails(
+        decisions,
+        risk_context
+    )
+    
+    # Extract filtered decisions
+    safe_decisions = guardrail_results["allowed_actions"]
+    blocked_decisions = guardrail_results["blocked_actions"]
+    
+    # Update summary if actions were blocked
+    guardrail_summary = risk_guardrails.summarize_guardrail_results(guardrail_results)
+
+    # ---------------------------------------------------------
+    # 7. Final Report
     # ---------------------------------------------------------
     summary_parts = [lock_in_report["summary"]]
     if conc_warning["is_concentrated"]:
@@ -184,6 +211,10 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         
     if better_opp_exists:
         summary_parts.append(f"Opportunity: {opportunity_report['summary']}")
+    
+    # Add guardrail summary if actions were blocked
+    if blocked_decisions:
+        summary_parts.append(f"SAFETY: {guardrail_summary}")
 
     final_summary = " ".join(summary_parts)
 
@@ -193,7 +224,8 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         "reallocation_trigger": reallocation_pressure,
         "concentration_risk": conc_warning,
         "opportunity_scan": opportunity_report,
-        "decisions": decisions
+        "decisions": safe_decisions,
+        "blocked_by_safety": blocked_decisions
     }
 
 # ---------------------------------------------------------
@@ -254,16 +286,29 @@ def run_demo():
 
     report_t1 = run_decision_engine(portfolio_t1, positions_t1, heatmap_t1, candidates_t1)
     
+    
     print(f"Summary: {report_t1['portfolio_summary']}")
     print(f"Pressure Score: {report_t1['pressure_score']}")
     conc = report_t1["concentration_risk"]
     print(f"Concentration: {conc['severity']} (Dom: {conc['dominant_sector']} @ {conc['exposure']:.0%})")
     
+    print("\n" + "-" * 75)
+    print("APPROVED ACTIONS")
     print("-" * 75)
     print(f"{'TARGET':<12} | {'TYPE':<10} | {'ACTION':<18} | {'REASON'}")
     print("-" * 75)
     for d in report_t1["decisions"]:
         print(f"{d['target']:<12} | {d['type']:<10} | {d['action']:<18} | {d['reason']}")
+    
+    # Display blocked actions
+    if report_t1.get("blocked_by_safety"):
+        print("\n" + "-" * 75)
+        print("🛡️  BLOCKED BY SAFETY GUARDRAILS")
+        print("-" * 75)
+        print(f"{'TARGET':<12} | {'TYPE':<10} | {'ACTION':<18} | {'SAFETY REASON'}")
+        print("-" * 75)
+        for b in report_t1["blocked_by_safety"]:
+            print(f"{b['target']:<12} | {b['type']:<10} | {b['action']:<18} | {b['reason']}")
 
 if __name__ == "__main__":
     run_demo()
