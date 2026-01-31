@@ -32,6 +32,14 @@ from backend.scenarios import get_scenario
 # DATA SOURCE CONFIGURATION
 # =============================================================================
 
+# 0. Check for Historical Validation Mode (Blocks normal execution)
+HISTORICAL_VALIDATION = os.environ.get("HISTORICAL_VALIDATION")
+if HISTORICAL_VALIDATION and HISTORICAL_VALIDATION.lower() == "true":
+    from validation.runner import run_validation
+    run_validation()
+    import sys
+    sys.exit(0)
+
 # 1. Detect Environment State
 AUTO_CONTEXT = market_mode.determine_execution_context()
 
