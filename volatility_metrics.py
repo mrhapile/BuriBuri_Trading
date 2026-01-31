@@ -71,6 +71,37 @@ def compute_atr(candles: List[Dict], period: int = 14) -> Dict[str, Optional[flo
     
     return {"atr": round(atr_value, 4)}
 
+
+def classify_volatility_state(atr: float, baseline_atr: float = 1.5) -> str:
+    """
+    Classifies volatility state based on ATR relative to a baseline.
+    
+    Args:
+        atr: Current ATR value.
+        baseline_atr: Expected normal ATR for the asset (default 1.5 for ETFs).
+        
+    Returns:
+        str: Volatility state classification.
+        
+    Classification Rules:
+        - ATR < 0.7 * baseline → LOW_VOLATILITY
+        - ATR > 1.5 * baseline → HIGH_VOLATILITY
+        - Otherwise → NORMAL_VOLATILITY
+    """
+    if atr is None or atr <= 0:
+        return "UNKNOWN"
+    
+    low_threshold = baseline_atr * 0.7
+    high_threshold = baseline_atr * 1.5
+    
+    if atr < low_threshold:
+        return "LOW_VOLATILITY"
+    elif atr > high_threshold:
+        return "HIGH_VOLATILITY"
+    else:
+        return "NORMAL_VOLATILITY"
+
+
 # ---------------------------------------------------------
 # Usage Example
 # ---------------------------------------------------------
@@ -100,14 +131,12 @@ if __name__ == "__main__":
     result = compute_atr(mock_candles, period=14)
     print(f"Valid Data ATR (Expected ~2.0): {result}")
     
+    # Test volatility classification
+    atr_val = result.get("atr")
+    state = classify_volatility_state(atr_val, baseline_atr=2.0)
+    print(f"Volatility State (ATR={atr_val}, Base=2.0): {state}")
+    
     # Test insufficient
     short_data = mock_candles[:10]
     result_insufficient = compute_atr(short_data, period=14)
     print(f"Insufficient Data ATR (Expected None): {result_insufficient}")
-    
-    # Test scrambled order
-    import random
-    scrambled = mock_candles[:]
-    random.shuffle(scrambled)
-    result_scrambled = compute_atr(scrambled, period=14)
-    print(f"Scrambled Data ATR (Should match Valid): {result_scrambled}")

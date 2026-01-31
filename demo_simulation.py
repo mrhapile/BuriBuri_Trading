@@ -10,8 +10,8 @@ Phase Boundary:
     Phase 3 → Portfolio decisions & actions (NOT in scope here)
 
 This script:
-    - Computes ATR from OHLC data
-    - Derives volatility state classification
+    - Computes ATR from OHLC data (using canonical volatility_metrics)
+    - Derives volatility state classification (using canonical volatility_metrics)
     - Computes news sentiment scores
     - Displays all Phase 2 signals in a clean, readable format
 
@@ -27,56 +27,17 @@ from typing import List, Dict, Any
 # Phase 1 Import (Data Ingestion)
 import opportunity_scanner
 
+# Phase 2 Import (Signal Logic)
+# SINGLE SOURCE OF TRUTH ENFORCEMENT
+from volatility_metrics import compute_atr, classify_volatility_state
+
 # Configure logging to suppress noisy output during demo
 logging.basicConfig(level=logging.ERROR)
 
 # =============================================================================
 # PHASE 2 SIGNAL UTILITIES (Pure Computation - No Decisions)
 # =============================================================================
-
-def compute_atr(candles: List[Dict[str, Any]], period: int = 14) -> float:
-    """Computes Average True Range (ATR) from OHLC candle data."""
-    if len(candles) < 2:
-        return 0.0
-    
-    true_ranges = []
-    for i in range(1, len(candles)):
-        current = candles[i]
-        previous = candles[i - 1]
-        
-        try:
-            high = float(current.get("high", 0))
-            low = float(current.get("low", 0))
-            prev_close = float(previous.get("close", 0))
-            
-            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
-            true_ranges.append(tr)
-        except (ValueError, TypeError):
-            continue
-    
-    if not true_ranges:
-        return 0.0
-    
-    relevant_ranges = true_ranges[-period:]
-    atr = sum(relevant_ranges) / len(relevant_ranges)
-    return round(atr, 4)
-
-
-def classify_volatility_state(atr: float, baseline_atr: float = 1.5) -> str:
-    """Classifies volatility state based on ATR relative to a baseline."""
-    if atr <= 0:
-        return "UNKNOWN"
-    
-    low_threshold = baseline_atr * 0.7
-    high_threshold = baseline_atr * 1.5
-    
-    if atr < low_threshold:
-        return "LOW_VOLATILITY"
-    elif atr > high_threshold:
-        return "HIGH_VOLATILITY"
-    else:
-        return "NORMAL_VOLATILITY"
-
+# NOTE: ATR and Volatility Logic removed from here. Imported from volatility_metrics.py
 
 def compute_news_sentiment(news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Computes aggregate news sentiment score from news items."""
@@ -142,7 +103,10 @@ def print_phase2_signals(timestamp: str, atr: float, volatility_state: str,
     print(f"  PHASE 2 SIGNALS  [{timestamp}]")
     print(f"{'='*50}\n")
     
-    print(f"  ATR (15m):           {atr:.4f}")
+    # Handle potentially None ATR
+    display_atr = atr if atr is not None else 0.0
+    
+    print(f"  ATR (15m):           {display_atr:.4f}")
     print(f"  Volatility State:    {volatility_state}\n")
     
     print(f"  News Sentiment:      {news_sentiment['score']:+.3f} ({news_sentiment['bias']})")
@@ -169,6 +133,9 @@ def print_separator():
 
 def generate_mock_candles(scenario: str = "normal") -> List[Dict[str, Any]]:
     """Generates mock OHLC candle data for testing."""
+    # Ensure canonical function expects 'timestamp' field, so we add it.
+    base_ts = datetime.datetime.now(datetime.timezone.utc)
+    
     base_price = 145.0
     if scenario == "low_vol":
         price_range = 0.2
@@ -178,9 +145,16 @@ def generate_mock_candles(scenario: str = "normal") -> List[Dict[str, Any]]:
         price_range = 1.5
 
     candles = []
-    for i in range(5):
-        high_mod = (i+1) * (price_range / 5)
+    for i in range(20): # increased to 20 to satisfy period=14 requirement
+        ts = base_ts + datetime.timedelta(minutes=15*i)
+        high_mod = (i+1) * (price_range / 5) if i < 5 else 0.5 # keep variance simple
+        
+        # Scenario adjustments
+        if scenario == "high_vol":
+             high_mod = 2.0 + (i % 3)
+             
         candles.append({
+            "timestamp": ts.isoformat(),
             "open": base_price + i,
             "high": base_price + i + high_mod,
             "low": base_price + i - (high_mod/2),
@@ -213,6 +187,8 @@ def generate_mock_positions(scenario: str = "mixed") -> List[Dict[str, Any]]:
 # MAIN SIMULATION - PHASE 2 SIGNAL VALIDATION
 # =============================================================================
 
+import datetime # Needed for mock timestamps
+
 def main():
     print("\n" + "=" * 60)
     print("  PHASE 2 SIGNAL VALIDATION DEMO")
@@ -237,7 +213,6 @@ def main():
         
         if real_candles:
             print(f"    ✅ Success: Fetched {len(real_candles)} live candles.")
-            atr_input = real_candles
         else:
             print("    ⚠️  API returned no data (likely no API key set).")
             print("    👉 Switching to MOCK DATA for simulation.")
@@ -261,8 +236,17 @@ def main():
     else:
         dataset = real_candles
 
-    atr = compute_atr(dataset)
+    # Compute ATR using Canonical Logic
+    # canonical compute_atr returns dict {'atr': val}
+    atr_result = compute_atr(dataset)
+    atr = atr_result.get("atr")
+    
+    # If None (insufficient data), default to 0.0
+    if atr is None:
+        atr = 0.0
+        
     vol_state = classify_volatility_state(atr)
+    
     # News is always mock since we removed news fetching from Phase 1
     sentiment = compute_news_sentiment(generate_mock_news("neutral")) 
     vitals = compute_position_vitals_summary(generate_mock_positions("mixed"))
@@ -271,8 +255,14 @@ def main():
     
     # Run High Volatility Mock Scenario to prove logic handles it
     print("\n>>> SCENARIO 2: [Mock] High Volatility Stress Test")
-    atr_stress = compute_atr(generate_mock_candles("high_vol"))
+    
+    # Needs valid mock data with timestamps for canonical ATR to work
+    stress_candles = generate_mock_candles("high_vol")
+    atr_stress_res = compute_atr(stress_candles)
+    atr_stress = atr_stress_res.get("atr", 0.0)
+    
     vol_stress = classify_volatility_state(atr_stress)
+    
     print_phase2_signals("STRESS_TEST", atr_stress, vol_stress, 
                         {"score": -0.5, "bias": "NEGATIVE", "item_count": 5}, 
                         {
