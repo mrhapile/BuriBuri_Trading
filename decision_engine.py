@@ -1,43 +1,187 @@
 import position_vitals as vitals_monitor
 import capital_lock_in
-import opportunity_scanner
 import opportunity_logic
 import concentration_guard
 import decision_explainer
+import volatility_metrics
+import news_scorer
+import sector_confidence
 
-def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: dict, candidates: list) -> dict:
+def determine_market_posture(
+    volatility_state: str,
+    confidence_score: int,
+    news_score: float,
+    vitals_summary: dict
+) -> dict:
+    """
+    Determines the high-level market posture and risk level based on aggregated Phase 2 signals.
+    
+    Rules:
+    1. RISK_OFF: If Portfolio is unhealthy (Unhealthy > Healthy positions).
+    2. DEFENSIVE: EXPANDING volatility + Low Confidence (< 50).
+    3. AGGRESSIVE: CONTRACTING volatility + High Confidence (> 70).
+    4. OPPORTUNITY: STABLE volatility + Good Confidence (> 65).
+    5. NEUTRAL: Default state.
+    
+    Args:
+        volatility_state (str): EXPANDING | STABLE | CONTRACTING
+        confidence_score (int): 0-100
+        news_score (float): 0-100
+        vitals_summary (dict): { "healthy": int, "weak": int, "unhealthy": int }
+        
+    Returns:
+        dict: {
+            "market_posture": str,
+            "risk_level": "LOW | MEDIUM | HIGH",
+            "confidence": int,
+            "reasons": list[str]
+        }
+    """
+    reasons = []
+    posture = "NEUTRAL"
+    risk_level = "MEDIUM"
+    
+    # 1. Check Internal Health (Portfolio Vitals) - HIGHEST PRIORITY
+    healthy_count = vitals_summary.get("healthy", 0)
+    unhealthy_count = vitals_summary.get("unhealthy", 0)
+    
+    if unhealthy_count > healthy_count:
+        posture = "RISK_OFF"
+        risk_level = "HIGH"
+        reasons.append(f"Portfolio unhealthy ({unhealthy_count} > {healthy_count}). Protecting capital.")
+        return {
+            "market_posture": posture,
+            "risk_level": risk_level,
+            "confidence": confidence_score,
+            "reasons": reasons
+        }
+
+    # 2. Check External Market Conditions
+    reasons.append(f"Volatility is {volatility_state} (Conf: {confidence_score})")
+    
+    if volatility_state == "EXPANDING":
+        risk_level = "HIGH"
+        if confidence_score < 50:
+            posture = "DEFENSIVE"
+            reasons.append("High uncertainty with weak sector confidence.")
+        else:
+            posture = "NEUTRAL"
+            reasons.append("High volatility but sector confidence holds.")
+            
+    elif volatility_state == "CONTRACTING":
+        risk_level = "LOW"
+        if confidence_score > 70:
+            posture = "AGGRESSIVE"
+            reasons.append("Volatility cooling + High confidence -> Trend following.")
+        else:
+            posture = "NEUTRAL"
+            reasons.append("Volatility cooling but confidence insufficient for aggression.")
+            
+    elif volatility_state == "STABLE":
+        risk_level = "MEDIUM"
+        if confidence_score > 65:
+            posture = "OPPORTUNITY"
+            reasons.append("Stable market with strong signals.")
+        else:
+            posture = "NEUTRAL"
+            reasons.append("Stable market, waiting for stronger signals.")
+            
+    else:
+        # Unknown state
+        posture = "NEUTRAL"
+        reasons.append("Market state unknown.")
+
+    return {
+        "market_posture": posture,
+        "risk_level": risk_level,
+        "confidence": confidence_score,
+        "reasons": reasons
+    }
+
+def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: dict, candidates: list, market_context: dict = None) -> dict:
     """
     Orchestrates portfolio decisions by combining:
     1. Vitals Monitor (Position Efficiency)
     2. Capital Lock-in Detector (Portfolio Efficiency)
     3. Opportunity Scanner (Relative Value)
     4. Concentration Guard (Risk Control)
+    5. Market Posture (Phase 2 Core Logic)
 
     Args:
         portfolio_state (dict): {total_capital, cash, ...}
         positions (dict): List of raw position dictionaries
         sector_heatmap (dict): {sector_name: heat_score}
         candidates (list): List of potential new trades {symbol, sector, projected_efficiency}
+        market_context (dict, optional): { "candles": [...], "news": [...] } for Phase 2 signals.
 
     Returns:
-        dict: Final decision report containing summary, alerts, and detailed decision list.
+        dict: Final decision report containing summary, alerts, detailed decision list, and market posture.
     """
     
     # ---------------------------------------------------------
-    # 1. POSITIONS ANALYSIS (The Vitals Monitor)
+    # 1. PREPARE MARKET SIGNALS (Phase 2)
+    # ---------------------------------------------------------
+    # Default values
+    vol_state = "STABLE"
+    news_res = {"news_score": 50}
+    
+    if market_context:
+        # A. Volatility
+        candles = market_context.get("candles", [])
+        if candles:
+            # Assume baseline is hardcoded or provided. For now, we compute current ATR.
+            # Real implementation would track baseline. We'll use a dummy baseline for demo logic.
+            atr_res = volatility_metrics.compute_atr(candles)
+            if atr_res["atr"]:
+                # Mock baseline: slightly lower than current to simulate slight expansion, or use avg
+                # For deterministic logical testing, let's assume baseline is close to current
+                baseline = atr_res["atr"] # No change
+                vol_res = volatility_metrics.classify_volatility_state(atr_res["atr"], baseline)
+                vol_state = vol_res["volatility_state"]
+        
+        # B. News
+        headlines = market_context.get("news", [])
+        if headlines:
+            # Extract strings if dicts provided
+            headline_strs = [h["title"] if isinstance(h, dict) else h for h in headlines]
+            news_res = news_scorer.score_tech_news(headline_strs)
+
+    # C. Confidence
+    conf_res = sector_confidence.compute_sector_confidence(vol_state, news_res["news_score"])
+    confidence_score = conf_res["sector_confidence"]
+
+    # ---------------------------------------------------------
+    # 2. POSITIONS ANALYSIS (The Vitals Monitor)
     # ---------------------------------------------------------
     analyzed_positions = []
+    vitals_counts = {"healthy": 0, "weak": 0, "unhealthy": 0}
+    
     for pos in positions:
         # Compute Vitals
         vitals_result = vitals_monitor.compute_vitals(pos)
         
-        # Merge results without mutating original
+        # Count health states for Market Posture
+        h_status = vitals_result.get("health", "").lower()
+        if h_status in vitals_counts:
+            vitals_counts[h_status] += 1
+            
+        # Merge results 
         enriched_pos = pos.copy()
         enriched_pos.update(vitals_result) 
         analyzed_positions.append(enriched_pos)
 
     # ---------------------------------------------------------
-    # 2. PORTFOLIO ANALYSIS (Capital Lock-in)
+    # 3. DETERMINE MARKET POSTURE
+    # ---------------------------------------------------------
+    posture_report = determine_market_posture(
+        volatility_state=vol_state,
+        confidence_score=confidence_score,
+        news_score=news_res["news_score"],
+        vitals_summary=vitals_counts
+    )
+
+    # ---------------------------------------------------------
+    # 4. PORTFOLIO ANALYSIS (Capital Lock-in)
     # ---------------------------------------------------------
     lock_in_report = capital_lock_in.detect_capital_lock_in(
         portfolio_state, 
@@ -49,7 +193,7 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     dead_capital_symbols = [d["symbol"] for d in lock_in_report["dead_positions"]]
 
     # ---------------------------------------------------------
-    # 3. RISK GUARDS (Concentration)
+    # 5. RISK GUARDS (Concentration)
     # ---------------------------------------------------------
     total_capital = float(portfolio_state.get("total_capital", 1.0))
     concentration_report = concentration_guard.analyze_portfolio_concentration(
@@ -59,17 +203,24 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     conc_warning = concentration_report["warning"]
     
     # ---------------------------------------------------------
-    # 4. OPPORTUNITY SCANNER (Relative Efficiency)
+    # 6. OPPORTUNITY SCANNER (Relative Efficiency)
     # ---------------------------------------------------------
+    
+    # --- PHASE 2 ADJUSTMENT: Filter Candidates by Posture ---
+    # If DEFENSIVE or RISK_OFF, ignore candidates
+    active_candidates = candidates
+    if posture_report["market_posture"] in ["DEFENSIVE", "RISK_OFF"]:
+        active_candidates = [] # Cut off inflows
+        
     opportunity_report = opportunity_logic.scan_for_opportunities(
         analyzed_positions, 
-        candidates
+        active_candidates
     )
     better_opp_exists = opportunity_report["better_opportunity_exists"]
     opp_confidence = opportunity_report.get("confidence", "N/A")
 
     # ---------------------------------------------------------
-    # 5. DECISION SYNTHESIS
+    # 7. DECISION SYNTHESIS
     # ---------------------------------------------------------
     decisions = []
     
@@ -121,6 +272,13 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
             action = "HOLD"
             reason = f"Weak vitals ({vitals}). Monitoring."
             
+        # --- PHASE 2 ADJUSTMENT: Posture Override ---
+        # If RISK_OFF, accelerate exits
+        if posture_report["market_posture"] == "RISK_OFF":
+            if action in ["HOLD", "REVIEW", "MAINTAIN"]:
+                action = "REDUCE_RISK"
+                reason = "RISK_OFF posture triggered. Reducing exposure."
+
         decisions.append({
             "target": symbol,
             "type": "POSITION",
@@ -130,7 +288,7 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         })
 
     # B. Process Candidates
-    for cand in candidates:
+    for cand in candidates: # iterates original candidates to show why they were accepted/rejected
         symbol = cand["symbol"]
         sector = cand["sector"]
         eff_score = cand.get("projected_efficiency", 0)
@@ -138,34 +296,41 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         action = "IGNORE"
         reason = f"Sector {sector} not attractive."
         
-        # Guards
-        is_sector_approaching = conc_warning["severity"] == "APPROACHING" and sector == conc_warning["dominant_sector"]
-        is_sector_breached = conc_warning["is_concentrated"] and sector == conc_warning["dominant_sector"]
+        is_ignored_due_to_posture = cand not in active_candidates
         
-        if is_sector_breached:
-            action = "BLOCK_RISK"
-            reason = f"Cannot allocate. Sector {sector} already over-concentrated ({conc_warning['exposure']:.0%})."
-        
-        elif sector in hot_sectors:
-            if reallocation_pressure:
-                # Differentiate based on concentration nearness
-                if is_sector_approaching:
-                    action = "ALLOCATE_CAPPED"
-                    reason = f"Hot sector ({sector}), but nearing concentration limit."
-                else:
-                    action = "ALLOCATE_HIGH"
-                    reason = f"Hot sector ({sector}). Deploying freed capital."
+        if is_ignored_due_to_posture:
+            action = "BLOCK_POSTURE"
+            reason = f"Market Posture is {posture_report['market_posture']}. inflows blocked."
+        else:
+            # Normal Logic
+            # Guards
+            is_sector_approaching = conc_warning["severity"] == "APPROACHING" and sector == conc_warning["dominant_sector"]
+            is_sector_breached = conc_warning["is_concentrated"] and sector == conc_warning["dominant_sector"]
             
-            elif portfolio_state["cash"] > 100000:
-                if is_sector_approaching:
-                    action = "ALLOCATE_CAUTIOUS"
-                    reason = f"Hot sector, but nearing concentration limit."
+            if is_sector_breached:
+                action = "BLOCK_RISK"
+                reason = f"Cannot allocate. Sector {sector} already over-concentrated ({conc_warning['exposure']:.0%})."
+            
+            elif sector in hot_sectors:
+                if reallocation_pressure:
+                    # Differentiate based on concentration nearness
+                    if is_sector_approaching:
+                        action = "ALLOCATE_CAPPED"
+                        reason = f"Hot sector ({sector}), but nearing concentration limit."
+                    else:
+                        action = "ALLOCATE_HIGH"
+                        reason = f"Hot sector ({sector}). Deploying freed capital."
+                
+                elif portfolio_state["cash"] > 100000:
+                    if is_sector_approaching:
+                        action = "ALLOCATE_CAUTIOUS"
+                        reason = f"Hot sector, but nearing concentration limit."
+                    else:
+                        action = "ALLOCATE"
+                        reason = f"Hot sector. Sufficient liquidity."
                 else:
-                    action = "ALLOCATE"
-                    reason = f"Hot sector. Sufficient liquidity."
-            else:
-                action = "WATCHLIST"
-                reason = "Hot sector, but limited capital."
+                    action = "WATCHLIST"
+                    reason = "Hot sector, but limited capital."
             
         decisions.append({
             "target": symbol,
@@ -176,9 +341,8 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         })
 
     # ---------------------------------------------------------
-    # 6. EXPLANATION LAYER (Phase 2 → Human-Readable)
+    # 8. EXPLANATION LAYER
     # ---------------------------------------------------------
-    # Collect signals for explainer (NO recomputation)
     portfolio_signals = {
         "dead_capital_symbols": dead_capital_symbols,
         "hot_sectors": hot_sectors,
@@ -189,20 +353,18 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     risk_signals = {
         "concentration_warning": conc_warning,
         "better_opp_exists": better_opp_exists,
-        "opp_confidence": opp_confidence
+        "opp_confidence": opp_confidence,
+        "market_posture": posture_report # Add posture to explanation context
     }
     
     # Enrich decisions with structured explanations
-    # Note: We need to pass sector info to decisions for fuller context
     for i, decision in enumerate(decisions):
         if decision["type"] == "POSITION":
-            # Find matching position to get sector
             matching_pos = next((p for p in analyzed_positions if p["symbol"] == decision["target"]), None)
             if matching_pos:
                 decision["sector"] = matching_pos.get("sector", "UNKNOWN")
                 decision["flags"] = matching_pos.get("flags", [])
         elif decision["type"] == "CANDIDATE":
-            # Find matching candidate
             matching_cand = next((c for c in candidates if c["symbol"] == decision["target"]), None)
             if matching_cand:
                 decision["sector"] = matching_cand.get("sector", "UNKNOWN")
@@ -214,17 +376,14 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     )
 
     # ---------------------------------------------------------
-    # 7. Final Report
+    # 9. Final Report
     # ---------------------------------------------------------
     summary_parts = [lock_in_report["summary"]]
+    summary_parts.append(f"POSTURE: {posture_report['market_posture']} (Conf: {posture_report['confidence']}).")
+    
     if conc_warning["is_concentrated"]:
-        summary_parts.append(f"ALERT: {conc_warning['dominant_sector']} sector over-concentrated at {conc_warning['exposure']:.0%}.")
-    elif conc_warning["severity"] == "APPROACHING":
-        summary_parts.append(f"WARNING: {conc_warning['dominant_sector']} sector approaching limit ({conc_warning['exposure']:.0%}).")
-        
-    if better_opp_exists:
-        summary_parts.append(f"Opportunity: {opportunity_report['summary']}")
-
+        summary_parts.append(f"ALERT: {conc_warning['dominant_sector']} sector over-concentrated.")
+    
     final_summary = " ".join(summary_parts)
 
     return {
@@ -233,7 +392,8 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
         "reallocation_trigger": reallocation_pressure,
         "concentration_risk": conc_warning,
         "opportunity_scan": opportunity_report,
-        "decisions": enriched_decisions
+        "decisions": enriched_decisions,
+        "market_posture": posture_report
     }
 
 # ---------------------------------------------------------
@@ -245,69 +405,39 @@ def run_demo():
     print("="*80)
 
     # -------------------------------------------------------------------------
-    # SCENARIO T0: Initial State - Balanced
+    # SCENARIO T0: Initial Balanced State
     # -------------------------------------------------------------------------
     print("\n--- T0: Initial Balanced State ---")
     portfolio_t0 = {"total_capital": 1000000.0, "cash": 150000.0}
     positions_t0 = [
-        {"symbol": "SAFE_TECH", "sector": "TECH", "entry_price": 100, "current_price": 110, "atr": 2.5, "days_held": 10, "capital_allocated": 300000}, # Healthy
-        {"symbol": "SLOW_UTIL", "sector": "UTILITIES", "entry_price": 50, "current_price": 51, "atr": 1.0, "days_held": 40, "capital_allocated": 200000}  # Stagnant
+        {"symbol": "SAFE_TECH", "sector": "TECH", "entry_price": 100, "current_price": 110, "atr": 2.5, "days_held": 10, "capital_allocated": 300000}, 
+        {"symbol": "SLOW_UTIL", "sector": "UTILITIES", "entry_price": 50, "current_price": 51, "atr": 1.0, "days_held": 40, "capital_allocated": 200000}
     ]
-    heatmap_t0 = {"TECH": 80, "UTILITIES": 50, "BIOTECH": 60}
+    heatmap_t0 = {"TECH": 80, "UTILITIES": 50}
     candidates_t0 = [{"symbol": "NEW_BIO", "sector": "BIOTECH", "projected_efficiency": 75.0}]
 
     report_t0 = run_decision_engine(portfolio_t0, positions_t0, heatmap_t0, candidates_t0)
     print(f"Summary: {report_t0['portfolio_summary']}")
     
     # -------------------------------------------------------------------------
-    # SCENARIO T1: Capital Lock-in + Concentration Risk Emerging
+    # SCENARIO T2: RISK_OFF (Unhealthy Portfolio)
     # -------------------------------------------------------------------------
-    print("\n--- T1: Stress Scenario (Lock-in + Concentration Risk) ---")
-    portfolio_t1 = {"total_capital": 1000000.0, "cash": 40000.0} # Low cash
-    positions_t1 = [
-        # Dead Capital Candidate
-        {
-            "symbol": "OLD_STEEL", "sector": "MATERIALS",
-            "entry_price": 100, "current_price": 95, "atr": 2.0, 
-            "days_held": 45, "capital_allocated": 300000 
-        },
-        # Concentration Cluster (Tech)
-        {
-            "symbol": "BIG_TECH_A", "sector": "TECH",
-            "entry_price": 150, "current_price": 180, "atr": 3.0, 
-            "days_held": 10, "capital_allocated": 400000 
-        },
-        {
-            "symbol": "BIG_TECH_B", "sector": "TECH",
-            "entry_price": 200, "current_price": 210, "atr": 4.0, 
-            "days_held": 20, "capital_allocated": 260000 
-        }
-        # Total Tech = 66% (Approaching 70% Limit)
+    print("\n--- T2: Risk Off Scenario (Unhealthy Portfolio) ---")
+    positions_t2 = [
+        {"symbol": "BAD_STOCK_1", "sector": "TECH", "entry_price": 100, "current_price": 80, "atr": 5.0, "days_held": 5, "capital_allocated": 300000}, # Unhealthy
+        {"symbol": "BAD_STOCK_2", "sector": "TECH", "entry_price": 100, "current_price": 85, "atr": 5.0, "days_held": 5, "capital_allocated": 300000}  # Unhealthy
     ]
+    # Unhealthy (2) > Healthy (0) -> Should trigger RISK_OFF
     
-    heatmap_t1 = {"TECH": 90, "MATERIALS": 20, "BIOTECH": 80}
+    report_t2 = run_decision_engine(portfolio_t0, positions_t2, heatmap_t0, candidates_t0)
+    print(f"Posture: {report_t2['market_posture']['market_posture']}")
+    print(f"Reasons: {report_t2['market_posture']['reasons']}")
     
-    candidates_t1 = [
-        {"symbol": "NEW_BIO", "sector": "BIOTECH", "projected_efficiency": 85.0},
-        {"symbol": "MORE_TECH", "sector": "TECH", "projected_efficiency": 95.0} # Should be CAPPED
-    ]
+    # Verify Decisions (Should contain BLOCK_POSTURE or REDUCE_RISK)
+    for d in report_t2["decisions"]:
+        if d['type'] == 'CANDIDATE':
+            print(f"Candidate Action: {d['action']} ({d['reason']})")
 
-    report_t1 = run_decision_engine(portfolio_t1, positions_t1, heatmap_t1, candidates_t1)
-    
-    print(f"Summary: {report_t1['portfolio_summary']}")
-    print(f"Pressure Score: {report_t1['pressure_score']}")
-    conc = report_t1["concentration_risk"]
-    print(f"Concentration: {conc['severity']} (Dom: {conc['dominant_sector']} @ {conc['exposure']:.0%})")
-    
-    print("\n" + "=" * 80)
-    print("DECISIONS WITH EXPLANATIONS")
-    print("=" * 80)
-    for d in report_t1["decisions"]:
-        print(f"\n[{d['type']}] {d['target']} → {d['action']}")
-        print(f"  Reasons:")
-        reasons = d.get('reasons', [d.get('reason', 'No explanation')])
-        for i, reason in enumerate(reasons, 1):
-            print(f"    {i}. {reason}")
 
 if __name__ == "__main__":
     run_demo()
