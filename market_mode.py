@@ -53,14 +53,13 @@ def get_market_status() -> Dict[str, str]:
             status = "OPEN" if clock.is_open else "CLOSED"
             reason = "Market is Open" if clock.is_open else "Market is Closed (Alpaca Clock)"
             
-            global _cached_status
             _cached_status = {
                 "status": status,
                 "reason": reason,
                 "timestamp": now_utc.isoformat()
             }
             return _cached_status
-        except Exception as e:
+        except Exception:
             # Fallback to local calculation if API fails
             pass
 
@@ -73,35 +72,38 @@ def get_market_status() -> Dict[str, str]:
 
     # 1. Check Weekend
     if now_et.weekday() >= 5: # 5=Sat, 6=Sun
-        return {
+        _cached_status = {
             "status": "CLOSED",
             "reason": "Weekend",
             "timestamp": now_utc.isoformat()
         }
+    else:
+        # 2. Check Hours (09:30 - 16:00 ET)
+        current_time = now_et.time()
+        market_open = datetime.time(9, 30)
+        market_close = datetime.time(16, 0)
         
-    # 2. Check Hours (09:30 - 16:00 ET)
-    current_time = now_et.time()
-    market_open = datetime.time(9, 30)
-    market_close = datetime.time(16, 0)
-    
-    if current_time < market_open:
-        return {
-            "status": "CLOSED",
-            "reason": "Pre-market",
-            "timestamp": now_utc.isoformat()
-        }
-    elif current_time > market_close:
-        return {
-            "status": "CLOSED",
-            "reason": "After hours",
-            "timestamp": now_utc.isoformat()
-        }
-        
-    return {
-        "status": "OPEN",
-        "reason": "Market Open (Local Time)",
-        "timestamp": now_utc.isoformat()
-    }
+        if current_time < market_open:
+            _cached_status = {
+                "status": "CLOSED",
+                "reason": "Pre-market",
+                "timestamp": now_utc.isoformat()
+            }
+        elif current_time > market_close:
+            _cached_status = {
+                "status": "CLOSED",
+                "reason": "After hours",
+                "timestamp": now_utc.isoformat()
+            }
+        else:
+            _cached_status = {
+                "status": "OPEN",
+                "reason": "Market Open (Local Time)",
+                "timestamp": now_utc.isoformat()
+            }
+            
+    return _cached_status
+
 
 def determine_execution_context() -> Dict[str, str]:
     """
@@ -146,6 +148,5 @@ def determine_execution_context() -> Dict[str, str]:
 
 if __name__ == "__main__":
     # Test
-    mode, context = determine_data_mode()
-    print(f"Detected Mode: {mode}")
-    print(f"Context: {context}")
+    context = determine_execution_context()
+    print(f"Detected Context: {context}")

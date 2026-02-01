@@ -14,53 +14,48 @@
 
 <body>
   <!-- ========================================
+         DATA SOURCE STATUS BAR (ALWAYS VISIBLE)
+         ======================================== -->
+  <div class="data-source-bar" id="data-source-bar">
+    <div class="data-source-info">
+      <span class="data-source-label">Market Status:</span>
+      <span class="data-source-value market-status" id="ds-market-status">—</span>
+      
+      <span class="data-source-separator">|</span>
+      
+      <span class="data-source-label">Data Feed:</span>
+      <span class="data-source-value data-mode" id="ds-data-mode">—</span>
+      
+      <span class="data-source-separator">|</span>
+      
+      <span class="data-source-label">Source:</span>
+      <span class="data-source-value data-source" id="ds-data-source">—</span>
+    </div>
+    <div class="data-source-message" id="ds-message"></div>
+  </div>
+
+  <!-- ========================================
          HEADER
          ======================================== -->
   <header class="header">
-    <div class="header-top">
-      <div class="header-content">
-        <h1 class="logo">🐻 BuriBuri Trading</h1>
-        <p class="tagline">Explainable, Risk-Aware Portfolio Decisions</p>
-      </div>
-      <div class="header-actions">
-        <span class="status-badge" id="status-badge">Ready</span>
-        <button class="btn-run" id="run-btn">Run Analysis</button>
-      </div>
+    <div class="header-content">
+      <h1 class="logo">🐻 BuriBuri Trading</h1>
+      <p class="tagline">Explainable, Risk-Aware Portfolio Decisions</p>
     </div>
-
-    <!-- New Transparency Bar -->
-    <div class="status-bar" id="system-status-bar">
-      <div class="status-item">
-        <span class="status-label">Market Status:</span>
-        <span class="status-value highlight" id="ui-market-status">DETECTING...</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Data Feed:</span>
-        <span class="status-value" id="ui-data-feed">—</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Source:</span>
-        <span class="status-value" id="ui-data-source">—</span>
-      </div>
-      <div class="status-item mode-description" id="ui-mode-desc">
-        Initializing data pipelines...
-      </div>
-    </div>
-
-    <!-- Controls Row -->
-    <div class="controls-bar">
-      <div class="control-group" id="historical-controls">
-        <div class="control-item">
-          <label for="symbol-selector" class="control-label">Company</label>
+    <div class="header-actions">
+      <!-- Market-Aware Data Controls -->
+      <div class="market-aware-controls">
+        <div class="control-group" id="symbol-control-group">
+          <label for="symbol-selector" class="control-label">Symbol:</label>
           <select id="symbol-selector" class="control-select">
-            <option value="SPY">SPY (S&P 500)</option>
-            <option value="QQQ">QQQ (Nasdaq 100)</option>
-            <option value="IWM">IWM (Russell 2000)</option>
+            <option value="SPY">SPY</option>
+            <option value="QQQ">QQQ</option>
+            <option value="IWM">IWM</option>
           </select>
         </div>
-        <div class="control-item">
-          <label for="range-selector" class="control-label">Historical Range</label>
-          <select id="range-selector" class="control-select">
+        <div class="control-group" id="time-range-control-group">
+          <label for="time-range-selector" class="control-label">Range:</label>
+          <select id="time-range-selector" class="control-select">
             <option value="1M">1 Month</option>
             <option value="4M">4 Months</option>
             <option value="6M" selected>6 Months</option>
@@ -68,20 +63,20 @@
           </select>
         </div>
       </div>
-
-      <div class="control-group">
-        <div class="control-item">
-          <label for="scenario-selector" class="control-label">Validation Scenario</label>
-          <select id="scenario-selector" class="control-select">
-            <option value="NORMAL">Normal Operation</option>
-            <option value="crash_reflex">🚨 The Crash Reflex</option>
-            <option value="concentration_guard">🛡️ The Concentration Guard</option>
-            <option value="disciplined_observer">👀 The Disciplined Observer</option>
-            <option value="dead_capital">♻️ The Dead Capital Rotator</option>
-            <option value="greedy_trap">🪤 The Greedy Trap</option>
-          </select>
-        </div>
+      
+      <!-- Scenario Controls -->
+      <div class="scenario-controls">
+        <select id="scenario-selector" class="scenario-selector">
+          <option value="NORMAL">Normal Operation</option>
+          <option value="crash_reflex">🚨 The Crash Reflex</option>
+          <option value="concentration_guard">🛡️ The Concentration Guard</option>
+          <option value="disciplined_observer">👀 The Disciplined Observer</option>
+          <option value="dead_capital">♻️ The Dead Capital Rotator</option>
+          <option value="greedy_trap">🪤 The Greedy Trap</option>
+        </select>
       </div>
+      <span class="status-badge" id="status-badge">Ready</span>
+      <button class="btn-run" id="run-btn">Run Analysis</button>
     </div>
   </header>
 
@@ -89,6 +84,29 @@
          MAIN CONTENT
          ======================================== -->
   <main class="main">
+    <!-- Data Source Info Panel -->
+    <section class="panel panel-wide" id="data-info-panel">
+      <h2 class="panel-title">📊 Data Source Information</h2>
+      <div class="data-info-grid">
+        <div class="data-info-item">
+          <span class="data-info-label">Selected Symbol</span>
+          <span class="data-info-value" id="info-symbol">—</span>
+        </div>
+        <div class="data-info-item">
+          <span class="data-info-label">Time Range</span>
+          <span class="data-info-value" id="info-time-range">—</span>
+        </div>
+        <div class="data-info-item">
+          <span class="data-info-label">Data Points</span>
+          <span class="data-info-value" id="info-candle-count">—</span>
+        </div>
+        <div class="data-info-item">
+          <span class="data-info-label">Date Range</span>
+          <span class="data-info-value" id="info-date-range">—</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Market Overview Panel -->
     <section class="panel" id="market-panel">
       <h2 class="panel-title">Market Overview</h2>
