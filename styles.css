@@ -61,6 +61,29 @@
     --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
 }
 
+/* --- Dark Mode Overrides --- */
+[data-theme="dark"] {
+    --bg-page: #0d1117;
+    --bg-white: #161b22;
+    --bg-subtle: #21262d;
+    
+    --border-light: #30363d;
+    --border-medium: #6e7681;
+    
+    --text-primary: #c9d1d9;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    
+    --status-neutral: #8b949e;
+    --status-neutral-bg: #21262d;
+    
+    /* Adjust Accents for Dark Mode */
+    --accent-blue-light: rgba(56, 139, 253, 0.15);
+    --status-positive-bg: rgba(46, 160, 67, 0.15);
+    --status-warning-bg: rgba(187, 128, 9, 0.15);
+    --status-danger-bg: rgba(248, 81, 73, 0.15);
+}
+
 /* --- Base Styles --- */
 html {
     font-size: 16px;
@@ -1195,3 +1218,392 @@ body {
 .brain-log-entry.warning { color: #ffb74d; }
 .brain-log-entry.blocked { color: #e57373; }
 .brain-log-entry.info { color: #d4d4d4; }
+/* =============================================================================
+   THEME TOGGLE & MARKET HOURS
+   ============================================================================= */
+.theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border-medium);
+    color: var(--text-primary);
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-right: 8px;
+}
+
+.theme-toggle:hover {
+    background: var(--bg-subtle);
+    border-color: var(--accent-blue);
+}
+
+.toggle-icon {
+    font-size: 1.1rem;
+    line-height: 1;
+    display: none;
+}
+
+/* Show Moon in Light Mode (to switch to Dark) */
+[data-theme="light"] .toggle-icon.moon { display: block; }
+[data-theme="light"] .toggle-icon.sun { display: none; }
+
+/* Show Sun in Dark Mode (to switch to Light) */
+[data-theme="dark"] .toggle-icon.sun { display: block; }
+[data-theme="dark"] .toggle-icon.moon { display: none; }
+
+/* Default fallback */
+:root:not([data-theme]) .toggle-icon.moon { display: block; }
+
+.market-hours-note {
+    width: 100%;
+    text-align: center;
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    padding: 6px;
+    border-bottom: 1px solid var(--border-light);
+    flex-basis: 100%;
+    order: -1; /* Force to top */
+    font-family: var(--font-mono);
+}
+
+/* Adjust header to allow wrapping for the top note */
+.header {
+    flex-wrap: wrap; 
+    padding-top: 0;
+    align-content: flex-start;
+}
+
+/* =============================================================================
+   RESPONSIVE HARDENING (MOBILE, TABLET, DESKTOP)
+   OVERRIDES ALL PREVIOUS LAYOUT RULES
+   ============================================================================= */
+
+/* --- Tablet & Smaller Laptop (Max 1024px) --- */
+@media (max-width: 1024px) {
+    .main {
+        max-width: 100%;
+        padding: var(--space-md);
+        gap: var(--space-md);
+    }
+
+    .header {
+        padding: var(--space-md);
+        gap: var(--space-md);
+    }
+    
+    .panel {
+        padding: var(--space-md);
+    }
+}
+
+/* --- Tablet Portrait & Large Phone (Max 768px) --- */
+@media (max-width: 768px) {
+    /* 1. Layout Stacking */
+    .main {
+        grid-template-columns: 1fr !important;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .panel-wide {
+        grid-column: span 1;
+        width: 100%;
+    }
+
+    /* 2. Header Adaptation */
+    .header {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .header-content {
+        align-items: center;
+        margin-bottom: var(--space-sm);
+    }
+    
+    .header-actions {
+        justify-content: center;
+        width: 100%;
+        gap: var(--space-sm);
+    }
+
+    .market-aware-controls,
+    .scenario-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+        border: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .control-group {
+        align-items: center;
+    }
+
+    /* 3. Data Source Bar */
+    .data-source-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: var(--space-md);
+        gap: var(--space-sm);
+    }
+    
+    .data-source-info {
+        flex-wrap: wrap;
+        gap: var(--space-xs);
+    }
+    
+    .data-source-separator {
+        display: none;
+    }
+
+    /* 4. Touch Targets */
+    .btn-run {
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+    }
+    
+    .theme-toggle {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* 5. Metrics Grids */
+    .metrics-grid,
+    .health-grid,
+    .data-info-grid, 
+    .memory-insight {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: var(--space-sm);
+    }
+}
+
+/* --- Mobile (Max 480px) --- */
+@media (max-width: 480px) {
+    /* 1. Typography Scaling */
+    html {
+        font-size: 14px;
+    }
+    
+    .hero-title {
+        font-size: 2.5rem !important;
+    }
+
+    /* 2. Dense Grids to Single Column */
+    .metrics-grid,
+    .health-grid,
+    .data-info-grid, 
+    .memory-insight {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* 3. Component Stacking */
+    .health-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .health-value {
+        align-self: flex-end;
+        background: var(--bg-subtle);
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    .decision-header {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .decision-action {
+        align-self: flex-start;
+    }
+
+    /* 4. Inputs Full Width */
+    .control-select, 
+    .symbol-selector, 
+    .time-range-selector {
+        width: 100%;
+        min-width: 0;
+        height: 44px; /* Touch target */
+    }
+
+    .control-group {
+        width: 100%;
+        align-items: stretch;
+    }
+    
+    /* 5. Market Hours Note */
+    .market-hours-note {
+        font-size: 0.7rem;
+    }
+}
+
+/* =============================================================================
+   ✨ ANIMATIONS & MICRO-INTERACTIONS & POLISH ✨
+   ============================================================================= */
+
+/* --- Keyframes --- */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse-soft {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse-glow-green {
+    0% { box-shadow: 0 0 0 0 rgba(46, 160, 67, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(46, 160, 67, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(46, 160, 67, 0); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-4px); }
+    100% { transform: translateY(0px); }
+}
+
+/* --- Panel & Card Interactions --- */
+.panel, .metric-card, .decision-card, .warning-item {
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), 
+                box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+                border-color 0.2s ease;
+}
+
+.panel:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-medium);
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    background: var(--bg-white);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* --- Button Polish --- */
+.btn-run {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.btn-run:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(9, 105, 218, 0.3);
+}
+
+.btn-run:active {
+    transform: scale(0.97);
+}
+
+.theme-toggle:hover {
+    transform: rotate(15deg);
+    background: var(--bg-subtle);
+}
+
+/* --- Input Interactions --- */
+.control-select, .symbol-selector, .time-range-selector {
+    transition: all 0.2s ease;
+}
+
+.control-select:hover, .symbol-selector:hover, .time-range-selector:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* --- Live Status Indicator --- */
+.data-source-value.market-status.open {
+    position: relative;
+    animation: pulse-glow-green 2s infinite;
+}
+
+.data-source-value.data-mode.live::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background-color: currentColor;
+    border-radius: 50%;
+    margin-right: 6px;
+    margin-bottom: 2px;
+    animation: pulse-soft 1.5s infinite ease-in-out;
+}
+
+/* --- Decision Feed Entries --- */
+.decision-card {
+    animation: fadeInUp 0.5s ease-out backwards;
+}
+
+/* Stagger animation for multiple items manually if needed (script handles this usually) */
+.decision-card:nth-child(1) { animation-delay: 0.1s; }
+.decision-card:nth-child(2) { animation-delay: 0.2s; }
+.decision-card:nth-child(3) { animation-delay: 0.3s; }
+
+/* --- Brain Log Updates --- */
+.brain-log-entry {
+    border-left: 2px solid transparent;
+    transition: background-color 0.2s;
+    padding-left: 8px;
+    margin-bottom: 4px;
+}
+
+.brain-log-entry:hover {
+    background-color: rgba(255,255,255,0.05);
+}
+
+.brain-log-entry.signal { border-left-color: #4fc3f7; }
+.brain-log-entry.decision { border-left-color: #81c784; }
+.brain-log-entry.warning { border-left-color: #ffb74d; }
+.brain-log-entry.blocked { border-left-color: #e57373; }
+
+/* --- Custom Scrollbar for Feeds --- */
+.decision-feed::-webkit-scrollbar, 
+.brain-log-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.decision-feed::-webkit-scrollbar-track, 
+.brain-log-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.decision-feed::-webkit-scrollbar-thumb, 
+.brain-log-container::-webkit-scrollbar-thumb {
+    background-color: var(--border-medium);
+    border-radius: 10px;
+}
+
+/* --- Dark Mode Enhancements --- */
+[data-theme="dark"] .metric-card:hover {
+    background: #1f2428; /* Slightly lighter than card bg */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+[data-theme="dark"] .btn-run:hover {
+    box-shadow: 0 0 15px rgba(9, 105, 218, 0.5);
+}

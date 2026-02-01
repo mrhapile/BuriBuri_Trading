@@ -1061,3 +1061,34 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('[BuriBuri] UI initialized. Mock mode:', CONFIG.MOCK_MODE);
 });
+
+// =============================================================================
+// THEME MANAGEMENT
+// =============================================================================
+
+function initTheme() {
+    const toggleBtn = document.getElementById('theme-toggle');
+    if (!toggleBtn) return;
+
+    // Check saved theme or default to light
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    toggleBtn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        
+        // Optional: play a sound or small animation
+    });
+}
+
+// Initialize Theme on Load
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    // Re-check theme specifically if it wasn't caught by the immediate run (e.g. if script runs in head)
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+});

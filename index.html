@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  
+
   <!-- DEPLOYMENT: Set backend URL for production -->
   <!-- Uncomment and set your Render backend URL below -->
   <!-- <script>const BACKEND_URL = 'https://your-render-app.onrender.com';</script> -->
@@ -24,14 +24,14 @@
     <div class="data-source-info">
       <span class="data-source-label">Market Status:</span>
       <span class="data-source-value market-status" id="ds-market-status">—</span>
-      
+
       <span class="data-source-separator">|</span>
-      
+
       <span class="data-source-label">Data Feed:</span>
       <span class="data-source-value data-mode" id="ds-data-mode">—</span>
-      
+
       <span class="data-source-separator">|</span>
-      
+
       <span class="data-source-label">Source:</span>
       <span class="data-source-value data-source" id="ds-data-source">—</span>
     </div>
@@ -67,7 +67,7 @@
           </select>
         </div>
       </div>
-      
+
       <!-- Scenario Controls -->
       <div class="scenario-controls">
         <select id="scenario-selector" class="scenario-selector">
@@ -79,7 +79,7 @@
           <option value="greedy_trap">🪤 The Greedy Trap</option>
         </select>
       </div>
-      
+
       <!-- UPGRADE 2: Market Crash Toggle -->
       <div class="crash-toggle-container">
         <label class="crash-toggle">
@@ -88,10 +88,15 @@
           <span class="crash-toggle-label">🚨 Simulate Crash</span>
         </label>
       </div>
-      
+
       <span class="status-badge" id="status-badge">Ready</span>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle Dark Mode">
+        <span class="toggle-icon sun">☀️</span>
+        <span class="toggle-icon moon">🌙</span>
+      </button>
       <button class="btn-run" id="run-btn">Run Analysis</button>
     </div>
+    <div class="market-hours-note">Market Open: 9:30 AM - 4:00 PM ET</div>
   </header>
 
   <!-- ========================================
@@ -190,7 +195,7 @@
         </div>
       </div>
     </section>
-    
+
     <!-- UPGRADE 1: Agent Memory Panel -->
     <section class="panel" id="memory-panel">
       <h2 class="panel-title">🧠 Agent Memory</h2>
@@ -214,7 +219,7 @@
       </div>
       <div class="memory-message" id="memory-message"></div>
     </section>
-    
+
     <!-- UPGRADE 3: Brain Log Panel -->
     <section class="panel panel-wide" id="brain-panel">
       <h2 class="panel-title">🧠 Agent Reasoning Stream</h2>
