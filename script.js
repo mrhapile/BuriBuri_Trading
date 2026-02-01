@@ -811,17 +811,18 @@ async function fetchAnalysis() {
 // MAIN RUN HANDLER
 // =============================================================================
 
-async function runAnalysis() {
+async function runAnalysis(silent = false) {
     try {
-        // Update UI to running state
-        setStatus('running', 'Running...');
-        if (elements.runBtn) {
-            elements.runBtn.disabled = true;
-            elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+        // Update UI to running state (only if explicit user action)
+        if (!silent) {
+            setStatus('running', 'Running...');
+            if (elements.runBtn) {
+                elements.runBtn.disabled = true;
+                elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+            }
+            // UPGRADE 3: Show thinking animation
+            showThinking();
         }
-        
-        // UPGRADE 3: Show thinking animation
-        showThinking();
 
         // Fetch data
         const wrapper = await fetchAnalysis();
@@ -881,7 +882,7 @@ async function runAnalysis() {
         }]);
 
     } finally {
-        if (elements.runBtn) {
+        if (!silent && elements.runBtn) {
             elements.runBtn.disabled = false;
             elements.runBtn.textContent = 'Run Analysis';
         }
@@ -960,11 +961,11 @@ let isFetching = false;
  * Robust data fetcher with error handling
  */
 async function performStableUpdate() {
-    if (isFetching) return; // Prevent overlapping calls
+    if (isFetching || document.hidden) return; // Prevent overlapping calls & save resources
     
     isFetching = true;
     try {
-        await runAnalysis();
+        await runAnalysis(true); // Silent run
         // Clear any global connection errors if successful
         const warningsList = document.getElementById('warnings-list');
         if (warningsList && warningsList.innerHTML.includes('Failed to connect')) {
@@ -983,7 +984,7 @@ async function performStableUpdate() {
  * Start the stable polling loop
  */
 function startPolling() {
-    if (pollingInterval) clearInterval(pollingInterval);
+    if (pollingInterval) return; // Idempotent: Do nothing if already running
     
     // Initial fetch
     performStableUpdate();
@@ -997,7 +998,9 @@ function startPolling() {
  * Stop polling (e.g. when tab is hidden to save resources)
  */
 function stopPolling() {
-    if (pollingInterval) clearInterval(pollingInterval);
+    if (!pollingInterval) return; // Idempotent: Do nothing if not running
+    
+    clearInterval(pollingInterval);
     pollingInterval = null;
     console.log('[BuriBuri] Auto-polling paused');
 }

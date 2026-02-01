@@ -119,16 +119,13 @@ class DataRouter:
     def get_routing_config(self) -> Dict[str, Any]:
         """
         Get current routing configuration.
-        Auto-refreshes market status if > 60s old.
+        Returns cached status. No auto-refresh (Session Immutability).
         """
         if not self._initialized:
             self.initialize()
         
-        # Auto-refresh if stale (every 60s)
-        if hasattr(self, '_last_status_check'):
-             age = (datetime.now() - self._last_status_check).total_seconds()
-             if age > 60:
-                 self._refresh_market_status()
+        # NOTE: Auto-refresh removed to enforce Session Immutability invariant.
+        # Market status is locked for the lifetime of the session.
         
         is_open = self._market_status.get("is_open", False)
         
