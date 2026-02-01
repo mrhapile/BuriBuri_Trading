@@ -48,18 +48,36 @@ api = Blueprint("api", __name__)
 # AGENT MEMORY (UPGRADE 1)
 # =============================================================================
 
-MEMORY_FILE = os.path.join(os.path.dirname(__file__), "agent_memory.json")
+MEMORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_memory.json")
+
+# Default memory structure
+DEFAULT_MEMORY = {"last_run": None}
+
+
+def ensure_memory_file():
+    """Ensure memory file exists with valid structure."""
+    if not os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, "w") as f:
+                json.dump(DEFAULT_MEMORY, f, indent=2)
+            print(f"✅ Created agent memory file: {MEMORY_FILE}")
+        except Exception as e:
+            print(f"⚠️ Could not create memory file: {e}")
 
 
 def load_agent_memory() -> dict:
     """Load previous run memory from persistent storage."""
+    ensure_memory_file()
     try:
-        if os.path.exists(MEMORY_FILE):
-            with open(MEMORY_FILE, "r") as f:
-                return json.load(f)
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+            # Validate structure
+            if "last_run" not in data:
+                return DEFAULT_MEMORY
+            return data
     except Exception as e:
         print(f"⚠️ Failed to load agent memory: {e}")
-    return {"last_run": None}
+    return DEFAULT_MEMORY
 
 
 def save_agent_memory(memory: dict):
@@ -369,12 +387,41 @@ def run_agent():
 
 @api.route("/health", methods=["GET"])
 def health_check():
-    """Simple health check endpoint."""
-    return jsonify({
-        "status": "OK",
-        "service": "Portfolio Intelligence System",
-        "version": "2.0.0-market-aware"
-    })
+    """
+    Health check endpoint for deployment monitoring.
+    
+    Returns agent status, memory state, and timestamp.
+    This endpoint must NEVER fail.
+    """
+    try:
+        memory = load_agent_memory()
+        memory_enabled = os.path.exists(MEMORY_FILE)
+        last_run = memory.get("last_run")
+        
+        return jsonify({
+            "status": "OK",
+            "service": "Portfolio Intelligence System",
+            "version": "2.0.0-market-aware",
+            "agent": {
+                "memory_enabled": memory_enabled,
+                "has_previous_run": last_run is not None,
+                "last_posture": last_run.get("market_posture") if last_run else None,
+                "last_risk": last_run.get("risk_level") if last_run else None
+            },
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        # Health endpoint must NEVER fail
+        return jsonify({
+            "status": "OK",
+            "service": "Portfolio Intelligence System",
+            "version": "2.0.0-market-aware",
+            "agent": {
+                "memory_enabled": False,
+                "error": str(e)
+            },
+            "timestamp": datetime.now().isoformat()
+        })
 
 
 @api.route("/reset", methods=["POST"])

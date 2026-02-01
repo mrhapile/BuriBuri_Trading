@@ -13,11 +13,17 @@ STRICT RULES:
 """
 
 import os
+import sys
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
+# Ensure backend directory is in path for imports
+_backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 # Import market status resolver
-from backend.market_status import get_market_status
+from market_status import get_market_status
 
 # Import data sources
 from historical_data_service import (

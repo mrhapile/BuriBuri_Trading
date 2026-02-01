@@ -1,0 +1,18 @@
+# Render Blueprint for Portfolio Intelligence System
+# Deploy with: Connect GitHub repo to Render
+
+services:
+  - type: web
+    name: portfolio-intelligence-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: ALPACA_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: ALPACA_SECRET_KEY
+        sync: false  # Set manually in Render dashboard
+    healthCheckPath: /health
+    autoDeploy: true

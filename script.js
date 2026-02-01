@@ -14,8 +14,35 @@
 // CONFIGURATION
 // =============================================================================
 
+/**
+ * Detect API base URL:
+ * 1. Check for global BACKEND_URL (set by deployment)
+ * 2. Check window.location for production hints
+ * 3. Fallback to localhost for development
+ */
+function getApiBase() {
+    // Allow override via global variable (set in index.html for deployment)
+    if (typeof BACKEND_URL !== 'undefined' && BACKEND_URL) {
+        return BACKEND_URL;
+    }
+    
+    // Check if we're on a production domain (not localhost/127.0.0.1)
+    const isProduction = window.location.hostname !== 'localhost' && 
+                         window.location.hostname !== '127.0.0.1';
+    
+    if (isProduction) {
+        // For production, assume backend is at same origin or use env-injected URL
+        // This will be overridden by BACKEND_URL if set
+        console.warn('⚠️ Production detected but no BACKEND_URL set. API calls may fail.');
+        return '';  // Same origin
+    }
+    
+    // Development: use localhost
+    return 'http://127.0.0.1:10000';
+}
+
 const CONFIG = {
-    API_BASE: 'http://127.0.0.1:5001',
+    API_BASE: getApiBase(),
     MOCK_MODE: false,  // Set to false when backend is running
 };
 
@@ -847,7 +874,7 @@ async function runAnalysis() {
 
         renderWarnings([{
             type: 'danger',
-            message: `Failed to connect to backend. Ensure Flask is running on port 5001. (${error.message})`
+            message: `Failed to connect to backend at ${CONFIG.API_BASE || 'origin'}. (${error.message})`
         }]);
 
     } finally {

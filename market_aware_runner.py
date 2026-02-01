@@ -13,8 +13,14 @@ STRICT DATA SOURCE RULES:
 """
 
 import os
+import sys
 from typing import Dict, Any, Optional
 from datetime import datetime
+
+# Ensure backend directory is in path for imports
+_backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
 
 # Core decision engine modules
 import volatility_metrics
@@ -33,7 +39,7 @@ from data_router import (
 )
 
 # Scenario support (for testing only)
-from backend.scenarios import get_scenario
+from scenarios import get_scenario
 
 
 def run_market_aware_analysis(
