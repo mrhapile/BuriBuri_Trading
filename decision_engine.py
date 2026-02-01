@@ -227,39 +227,53 @@ def determine_market_posture(
         "reasons": reasons
     }
 
-def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: dict, candidates: list, market_context: dict = None, execution_context: dict = None) -> dict:
+def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: dict, candidates: list, market_context: dict = None, execution_context: dict = None, thought_log: list = None) -> dict:
     """
     Orchestrates portfolio decisions.
     
     Args:
         execution_context (dict): { "system_mode": "...", "data_feed_mode": "..." }
+        thought_log (list): UPGRADE 3 - List to append reasoning messages
     """
     if execution_context is None:
         execution_context = {"mode": "DEMO", "data_source": "Default (Simulation)"}
+    
+    # UPGRADE 3: Initialize thought_log if not provided
+    if thought_log is None:
+        thought_log = []
 
     # ---------------------------------------------------------
     # 1. PREPARE MARKET SIGNALS (Phase 2)
     # ---------------------------------------------------------
+    thought_log.append("🔍 Phase 2: Preparing market signals...")
     vol_state = "STABLE"
     news_res = {"news_score": 50}
     
     if market_context:
-        # A. Volatility
-        candles = market_context.get("candles", [])
-        if candles:
-            atr_res = volatility_metrics.compute_atr(candles)
-            if atr_res["atr"]:
-                baseline = atr_res["atr"] # Mock baseline for demo
-                vol_res = volatility_metrics.classify_volatility_state(atr_res["atr"], baseline)
-                vol_state = vol_res["volatility_state"]
+        # A. Volatility - Check for override first (UPGRADE 2: Crash Simulation)
+        if "override_volatility" in market_context:
+            vol_state = market_context["override_volatility"]
+            thought_log.append(f"🚨 Volatility FORCED to: {vol_state}")
+        else:
+            candles = market_context.get("candles", [])
+            if candles:
+                atr_res = volatility_metrics.compute_atr(candles)
+                if atr_res["atr"]:
+                    baseline = atr_res["atr"] # Mock baseline for demo
+                    vol_res = volatility_metrics.classify_volatility_state(atr_res["atr"], baseline)
+                    vol_state = vol_res["volatility_state"]
         
-        # B. News
-        headlines = market_context.get("news", [])
-        if headlines:
-            headline_strs = [h["title"] if isinstance(h, dict) else h for h in headlines]
-            news_res = news_scorer.score_tech_news(headline_strs)
+        # B. News - Check for override first (UPGRADE 2: Crash Simulation)
+        if "override_news_score" in market_context:
+            news_res = {"news_score": market_context["override_news_score"]}
+            thought_log.append(f"🚨 News score FORCED to: {news_res['news_score']}")
+        else:
+            headlines = market_context.get("news", [])
+            if headlines:
+                headline_strs = [h["title"] if isinstance(h, dict) else h for h in headlines]
+                news_res = news_scorer.score_tech_news(headline_strs)
 
-    # C. Confidence
+    # C. Confidence - Check for override first (UPGRADE 2: Crash Simulation)
     if market_context and "override_confidence" in market_context:
         confidence_score = market_context["override_confidence"]
     else:    
@@ -269,6 +283,7 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     # ---------------------------------------------------------
     # 2. POSITIONS ANALYSIS (The Vitals Monitor)
     # ---------------------------------------------------------
+    thought_log.append("💊 Analyzing position vitals...")
     analyzed_positions = []
     vitals_counts = {"healthy": 0, "weak": 0, "unhealthy": 0}
     
@@ -285,16 +300,19 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     # ---------------------------------------------------------
     # 3. DETERMINE MARKET POSTURE
     # ---------------------------------------------------------
+    thought_log.append("🎯 Determining market posture...")
     posture_report = determine_market_posture(
         volatility_state=vol_state,
         confidence_score=confidence_score,
         news_score=news_res["news_score"],
         vitals_summary=vitals_counts
     )
+    thought_log.append(f"📊 Posture: {posture_report['market_posture']} | Risk: {posture_report['risk_level']}")
 
     # ---------------------------------------------------------
     # 4. PORTFOLIO ANALYSIS (Capital Lock-in)
     # ---------------------------------------------------------
+    thought_log.append("💰 Detecting capital lock-in...")
     lock_in_report = capital_lock_in.detect_capital_lock_in(
         portfolio_state, 
         analyzed_positions, 
@@ -303,23 +321,30 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     reallocation_pressure = lock_in_report["reallocation_alert"]
     hot_sectors = lock_in_report["hot_sectors"]
     dead_capital_symbols = [d["symbol"] for d in lock_in_report["dead_positions"]]
+    if dead_capital_symbols:
+        thought_log.append(f"⚠️ Dead capital detected: {', '.join(dead_capital_symbols)}")
 
     # ---------------------------------------------------------
     # 5. RISK GUARDS (Concentration)
     # ---------------------------------------------------------
+    thought_log.append("🛡️ Evaluating concentration limits...")
     total_capital = float(portfolio_state.get("total_capital", 1.0))
     concentration_report = concentration_guard.analyze_portfolio_concentration(
         analyzed_positions, 
         total_capital
     )
     conc_warning = concentration_report["warning"]
+    if conc_warning.get("is_concentrated"):
+        thought_log.append(f"⚠️ Concentration risk: {conc_warning['dominant_sector']} at {conc_warning.get('exposure', 0):.0%}")
     
     # ---------------------------------------------------------
     # 6. OPPORTUNITY SCANNER (Relative Efficiency)
     # ---------------------------------------------------------
+    thought_log.append("🔭 Scanning for opportunities...")
     active_candidates = candidates
     if posture_report["market_posture"] in ["DEFENSIVE", "RISK_OFF"]:
         active_candidates = [] # Cut off inflows
+        thought_log.append("🚫 Inflows blocked due to defensive posture")
         
     opportunity_report = opportunity_logic.scan_for_opportunities(
         analyzed_positions, 
@@ -476,6 +501,7 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     # ---------------------------------------------------------
     # 9. RISK GUARDRAILS (Final Safety Gate)
     # ---------------------------------------------------------
+    thought_log.append("🔒 Applying final safety guardrails...")
     risk_context = {
         "concentration": conc_warning,
         "cash_available": float(portfolio_state.get("cash", 0.0)),
@@ -485,11 +511,16 @@ def run_decision_engine(portfolio_state: dict, positions: list, sector_heatmap: 
     
     guardrail_results = risk_guardrails.apply_risk_guardrails(
         enriched_decisions,
-        risk_context
+        risk_context,
+        thought_log=thought_log  # UPGRADE 3: Pass thought_log
     )
     
     safe_decisions = guardrail_results["allowed_actions"]
     blocked_decisions = guardrail_results["blocked_actions"]
+    
+    if blocked_decisions:
+        thought_log.append(f"🛡️ Safety blocked {len(blocked_decisions)} action(s)")
+    thought_log.append(f"✅ Final decisions ready: {len(safe_decisions)} approved")
     
     # ---------------------------------------------------------
     # 10. GENERATE OUTPUTS

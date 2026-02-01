@@ -22,7 +22,8 @@ from typing import List, Dict, Any
 
 def apply_risk_guardrails(
     proposed_decisions: List[Dict[str, Any]],
-    risk_context: Dict[str, Any]
+    risk_context: Dict[str, Any],
+    thought_log: List[str] = None
 ) -> Dict[str, Any]:
     """
     Filters proposed decisions through mandatory safety rules.
@@ -44,6 +45,7 @@ def apply_risk_guardrails(
                 "minimum_reserve": float,
                 "volatility_state": str  # "EXPANDING" | "STABLE" | "CONTRACTING"
             }
+        thought_log (list): UPGRADE 3 - List to append safety reasoning
     
     Returns:
         dict: {
@@ -51,6 +53,10 @@ def apply_risk_guardrails(
             "blocked_actions": List[Dict with "safety_reason" field]
         }
     """
+    
+    # UPGRADE 3: Initialize thought_log if not provided
+    if thought_log is None:
+        thought_log = []
     
     # =========================================================================
     # DEFENSIVE INPUT VALIDATION
@@ -134,6 +140,8 @@ def apply_risk_guardrails(
             blocked_decision = decision.copy()
             blocked_decision["safety_reason"] = block_reason
             blocked.append(blocked_decision)
+            # UPGRADE 3: Log blocked action
+            thought_log.append(f"🚫 BLOCKED: {decision.get('target', 'N/A')} — {block_reason}")
         else:
             allowed.append(decision)
     

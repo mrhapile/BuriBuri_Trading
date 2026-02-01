@@ -75,6 +75,16 @@
           <option value="greedy_trap">🪤 The Greedy Trap</option>
         </select>
       </div>
+      
+      <!-- UPGRADE 2: Market Crash Toggle -->
+      <div class="crash-toggle-container">
+        <label class="crash-toggle">
+          <input type="checkbox" id="crash-toggle" />
+          <span class="crash-toggle-slider"></span>
+          <span class="crash-toggle-label">🚨 Simulate Crash</span>
+        </label>
+      </div>
+      
       <span class="status-badge" id="status-badge">Ready</span>
       <button class="btn-run" id="run-btn">Run Analysis</button>
     </div>
@@ -173,6 +183,43 @@
       <div class="warnings-list" id="warnings-list">
         <div class="empty-state" id="empty-warnings">
           <p>No active warnings</p>
+        </div>
+      </div>
+    </section>
+    
+    <!-- UPGRADE 1: Agent Memory Panel -->
+    <section class="panel" id="memory-panel">
+      <h2 class="panel-title">🧠 Agent Memory</h2>
+      <div class="memory-insight" id="memory-insight">
+        <div class="memory-item">
+          <span class="memory-label">Previous Posture</span>
+          <span class="memory-value" id="mem-prev-posture">—</span>
+        </div>
+        <div class="memory-item">
+          <span class="memory-label">Previous Risk</span>
+          <span class="memory-value" id="mem-prev-risk">—</span>
+        </div>
+        <div class="memory-item">
+          <span class="memory-label">Current Risk</span>
+          <span class="memory-value" id="mem-curr-risk">—</span>
+        </div>
+        <div class="memory-item memory-trend">
+          <span class="memory-label">Trend</span>
+          <span class="memory-value trend-badge" id="mem-trend">—</span>
+        </div>
+      </div>
+      <div class="memory-message" id="memory-message"></div>
+    </section>
+    
+    <!-- UPGRADE 3: Brain Log Panel -->
+    <section class="panel panel-wide" id="brain-panel">
+      <h2 class="panel-title">🧠 Agent Reasoning Stream</h2>
+      <div class="brain-log-container">
+        <div class="brain-log" id="brain-log">
+          <div class="brain-thinking" id="brain-thinking">
+            <span class="thinking-indicator">🧠</span>
+            <span class="thinking-text">Agent is waiting...</span>
+          </div>
         </div>
       </div>
     </section>

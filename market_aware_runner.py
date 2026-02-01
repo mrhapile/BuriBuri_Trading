@@ -39,7 +39,8 @@ from backend.scenarios import get_scenario
 def run_market_aware_analysis(
     scenario_id: Optional[str] = None,
     symbol: Optional[str] = None,
-    time_range: Optional[str] = None
+    time_range: Optional[str] = None,
+    crash_override: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Run the full decision pipeline using market-aware data routing.
@@ -52,6 +53,7 @@ def run_market_aware_analysis(
         scenario_id: Optional scenario override (for testing)
         symbol: Optional symbol override (historical mode only)
         time_range: Optional time range (historical mode only)
+        crash_override: Optional crash simulation context (UPGRADE 2)
     
     Returns:
         Complete analysis result with:
@@ -60,20 +62,30 @@ def run_market_aware_analysis(
         - data_source
         - routing_config
         - analysis
+        - thought_log (UPGRADE 3)
     """
+    # =================================================================
+    # UPGRADE 3: Initialize Thought Log
+    # =================================================================
+    thought_log = []
+    thought_log.append("🧠 Agent initializing analysis pipeline...")
+    
     # Initialize data router
     router = get_data_router()
+    thought_log.append(f"📡 Data router initialized")
     
     # Apply symbol/time_range if provided (only works in historical mode)
     if symbol:
         try:
             router.set_symbol(symbol)
+            thought_log.append(f"🎯 Symbol set to {symbol}")
         except ValueError as e:
             print(f"⚠️ Symbol override ignored: {e}")
     
     if time_range:
         try:
             router.set_time_range(time_range)
+            thought_log.append(f"📅 Time range set to {time_range}")
         except ValueError as e:
             print(f"⚠️ Time range override ignored: {e}")
     
@@ -81,18 +93,21 @@ def run_market_aware_analysis(
     routing_config = router.get_routing_config()
     data_mode = routing_config["data_mode"]
     is_open = routing_config["is_open"]
+    thought_log.append(f"📊 Market Status: {'OPEN' if is_open else 'CLOSED'} | Mode: {data_mode}")
     
     # Get data from appropriate source
     market_data = router.get_market_data()
     portfolio_data = router.get_portfolio_data()
     sector_heatmap = router.get_sector_heatmap()
     candidates = router.get_candidates()
+    thought_log.append(f"📦 Data loaded from {routing_config['data_source']}")
     
     # Extract data components
     candles = market_data.get("candles", [])
     headlines = market_data.get("headlines", [])
     portfolio = portfolio_data.get("portfolio", {})
     positions = portfolio_data.get("positions", [])
+    thought_log.append(f"📈 Processing {len(candles)} candles, {len(positions)} positions")
     
     # Handle scenario overrides (for testing)
     scenario = get_scenario(scenario_id) if scenario_id else {}
@@ -104,7 +119,20 @@ def run_market_aware_analysis(
         if "candidates" in overrides:
             candidates = overrides["candidates"]
     
+    # =================================================================
+    # UPGRADE 2: Apply Crash Simulation Override
+    # =================================================================
+    if crash_override:
+        thought_log.append("🚨 CRASH SIMULATION ACTIVE — Volatility override engaged")
+        if "force_volatility_state" in crash_override:
+            overrides["volatility_state"] = crash_override["force_volatility_state"]
+        if "force_news_score" in crash_override:
+            overrides["news_score"] = crash_override["force_news_score"]
+        if "force_sector_confidence" in crash_override:
+            overrides["sector_confidence"] = crash_override["force_sector_confidence"]
+    
     # Compute signals from data
+    thought_log.append("📊 Analyzing volatility regime...")
     if candles:
         atr_res = volatility_metrics.compute_atr(candles)
         baseline_atr = 2.5
@@ -116,20 +144,29 @@ def run_market_aware_analysis(
     else:
         vol_state = "STABLE"
     
+    thought_log.append(f"📉 Volatility state: {vol_state}")
+    
+    thought_log.append("📰 Processing news sentiment...")
     if headlines:
         news_res = news_scorer.score_tech_news(headlines)
         news_score_val = news_res.get("news_score", 50)
     else:
         news_score_val = 50  # Neutral when no headlines
     
+    thought_log.append(f"📰 News score: {news_score_val}/100")
+    
+    thought_log.append("🎯 Computing sector confidence...")
     conf_res = sector_confidence.compute_sector_confidence(vol_state, news_score_val)
     confidence_val = conf_res.get("sector_confidence", 50)
+    thought_log.append(f"🎯 Sector confidence: {confidence_val}/100")
     
     # Apply scenario overrides to signals
     if "volatility_state" in overrides:
         vol_state = overrides["volatility_state"]
+        thought_log.append(f"⚡ Volatility OVERRIDE: {vol_state}")
     if "news_score" in overrides:
         news_score_val = overrides["news_score"]
+        thought_log.append(f"⚡ News score OVERRIDE: {news_score_val}")
     if "sector_confidence" in overrides:
         confidence_val = overrides["sector_confidence"]
     
@@ -155,13 +192,15 @@ def run_market_aware_analysis(
     }
     
     # Run decision engine
+    thought_log.append("🧠 Running decision engine...")
     decision_report = decision_engine.run_decision_engine(
         portfolio_state=portfolio,
         positions=positions,
         sector_heatmap=sector_heatmap,
         candidates=candidates,
         market_context=market_context,
-        execution_context=execution_context
+        execution_context=execution_context,
+        thought_log=thought_log  # UPGRADE 3: Pass thought_log
     )
     
     # Extract components
@@ -169,6 +208,12 @@ def run_market_aware_analysis(
     safe_decisions = decision_report.get("decisions", [])
     blocked_decisions = decision_report.get("blocked_by_safety", [])
     concentration_risk = decision_report.get("concentration_risk", {})
+    
+    thought_log.append(f"📋 Market posture determined: {posture.get('market_posture', 'N/A')}")
+    thought_log.append(f"⚠️ Risk level: {posture.get('risk_level', 'N/A')}")
+    thought_log.append(f"✅ Allowed decisions: {len(safe_decisions)}")
+    if blocked_decisions:
+        thought_log.append(f"🛡️ Blocked by safety: {len(blocked_decisions)} actions")
     
     # Calculate average vitals
     pos_scores = [d["score"] for d in safe_decisions if d["type"] == "POSITION"]
@@ -191,6 +236,7 @@ def run_market_aware_analysis(
     summary = execution_summary.generate_execution_summary(summary_context)
     
     # Build analysis result
+    thought_log.append("📝 Generating final analysis report...")
     analysis_result = {
         # Phase 2 Signals
         "signals": {
@@ -252,6 +298,9 @@ def run_market_aware_analysis(
         
         # Status Message for UI
         "status_message": routing_config.get("status_message", ""),
+        
+        # UPGRADE 3: Thought Log
+        "thought_log": thought_log,
         
         # Analysis Results
         "analysis": analysis_result
