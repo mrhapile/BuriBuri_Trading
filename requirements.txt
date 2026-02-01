@@ -1,6 +1,12 @@
-requests>=2.31.0
-alpaca-trade-api>=3.0.0
-python-dotenv>=1.0.0
+# Core dependencies
 flask>=2.0.0
 flask-cors>=3.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
 pytz>=2023.3
+
+# Alpaca API (optional - for live trading mode)
+alpaca-trade-api>=3.0.0
+
+# Production server (Render deployment)
+gunicorn>=21.0.0
