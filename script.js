@@ -46,6 +46,8 @@ const CONFIG = {
     MOCK_MODE: false,  // Set to false when backend is running
 };
 
+const BACKEND_URL = "https://buriburi-agent-backend.onrender.com";
+
 // =============================================================================
 // STATE MANAGEMENT
 // =============================================================================
