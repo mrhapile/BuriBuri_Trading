@@ -71,16 +71,25 @@ class DataRouter:
     def initialize(self) -> Dict[str, Any]:
         """
         Initialize the router by checking market status.
-        
-        This should be called ONCE per run/session.
-        All subsequent data routing uses this cached status.
+        All subsequent data routing uses this status until refresh.
         
         Returns:
             Dict with routing configuration
         """
+        self._refresh_market_status()
+        return self.get_routing_config()
+        
+    def _refresh_market_status(self):
+        """Fetch authoritative market status and update internal state."""
         # Get authoritative market status
         self._market_status = get_market_status()
+        self._last_status_check = datetime.now()
         is_open = self._market_status.get("is_open", False)
+        
+        # Log transition if state changes
+        new_mode = DATA_MODE_LIVE if is_open else DATA_MODE_HISTORICAL
+        if self._data_mode and self._data_mode != new_mode:
+            print(f"🔄 [DataRouter] Market Status Transition: {self._data_mode} -> {new_mode}")
         
         if is_open:
             self._data_mode = DATA_MODE_LIVE
@@ -89,12 +98,9 @@ class DataRouter:
         else:
             self._data_mode = DATA_MODE_HISTORICAL
             self._data_source = DATA_SOURCE_HISTORICAL
-            # No live adapter needed
             self._live_adapter = None
         
         self._initialized = True
-        
-        return self.get_routing_config()
     
     def _initialize_live_adapter(self):
         """Initialize the live Alpaca adapter if credentials are available."""
@@ -113,19 +119,16 @@ class DataRouter:
     def get_routing_config(self) -> Dict[str, Any]:
         """
         Get current routing configuration.
-        
-        Returns:
-            Dict with:
-                - market_status: OPEN or CLOSED
-                - data_mode: LIVE or HISTORICAL
-                - data_source: Human-readable source label
-                - selected_symbol: Current symbol selection
-                - selected_time_range: Current time range (historical only)
-                - available_symbols: List of selectable symbols
-                - available_time_ranges: Time range options (historical only)
+        Auto-refreshes market status if > 60s old.
         """
         if not self._initialized:
             self.initialize()
+        
+        # Auto-refresh if stale (every 60s)
+        if hasattr(self, '_last_status_check'):
+             age = (datetime.now() - self._last_status_check).total_seconds()
+             if age > 60:
+                 self._refresh_market_status()
         
         is_open = self._market_status.get("is_open", False)
         

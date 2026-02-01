@@ -38,7 +38,7 @@ function getApiBase() {
     }
     
     // Development: use localhost
-    return 'http://127.0.0.1:10000';
+    return 'http://127.0.0.1:5001';
 }
 
 const CONFIG = {
@@ -46,7 +46,8 @@ const CONFIG = {
     MOCK_MODE: false,  // Set to false when backend is running
 };
 
-const BACKEND_URL = "https://buriburi-agent-backend.onrender.com";
+// Remove hardcoded production URL that breaks local dev
+// const BACKEND_URL = "https://buriburi-agent-backend.onrender.com";
 
 // =============================================================================
 // STATE MANAGEMENT
@@ -947,6 +948,73 @@ async function handleTimeRangeChange(event) {
 // INITIALIZATION
 // =============================================================================
 
+// =============================================================================
+// AUTO-POLLING & STABILITY
+// =============================================================================
+
+let pollingInterval = null;
+const POLLING_RATE = 5000; // 5 seconds
+let isFetching = false;
+
+/**
+ * Robust data fetcher with error handling
+ */
+async function performStableUpdate() {
+    if (isFetching) return; // Prevent overlapping calls
+    
+    isFetching = true;
+    try {
+        await runAnalysis();
+        // Clear any global connection errors if successful
+        const warningsList = document.getElementById('warnings-list');
+        if (warningsList && warningsList.innerHTML.includes('Failed to connect')) {
+            renderWarnings([]); // Clear stale connection warnings
+        }
+    } catch (error) {
+        console.warn('[Auto-Poll] Transient failure:', error);
+        // Do NOT wipe the UI on transient failure. 
+        // Just show a small toast or subtle indicator if needed.
+    } finally {
+        isFetching = false;
+    }
+}
+
+/**
+ * Start the stable polling loop
+ */
+function startPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    
+    // Initial fetch
+    performStableUpdate();
+    
+    // Start loop
+    pollingInterval = setInterval(performStableUpdate, POLLING_RATE);
+    console.log(`[BuriBuri] Auto-polling started (${POLLING_RATE}ms)`);
+}
+
+/**
+ * Stop polling (e.g. when tab is hidden to save resources)
+ */
+function stopPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = null;
+    console.log('[BuriBuri] Auto-polling paused');
+}
+
+// Handle visibility change to be good citizens
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopPolling();
+    } else {
+        startPolling();
+    }
+});
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+
 /**
  * Initialize the application
  */
@@ -965,19 +1033,28 @@ async function initializeApp() {
             updateMarketAwareControls(status);
             
             console.log(`[BuriBuri] Market: ${status.market_status} | Mode: ${status.data_mode}`);
+            
+            // Start the optimized polling loop
+            startPolling();
         }
     } catch (error) {
         console.warn('[BuriBuri] Could not fetch initial status:', error);
+        renderWarnings([{
+            type: 'danger',
+            message: `System Initialization Failed: Could not connect to backend at ${CONFIG.API_BASE}. Ensure server is running.`
+        }]);
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize the app
     initializeApp();
     
-    // Bind run button
+    // Bind run button for manual refresh
     if (elements.runBtn) {
-        elements.runBtn.addEventListener('click', runAnalysis);
+        elements.runBtn.addEventListener('click', () => {
+            stopPolling(); // Reset timer on manual click
+            performStableUpdate().then(startPolling);
+        });
     }
     
     // Bind symbol selector
