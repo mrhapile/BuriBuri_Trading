@@ -43,8 +43,29 @@
       <p class="tagline">Explainable, Risk-Aware Portfolio Decisions</p>
     </div>
     <div class="header-actions">
+      <!-- Market-Aware Data Controls -->
+      <div class="market-aware-controls">
+        <div class="control-group" id="symbol-control-group">
+          <label for="symbol-selector" class="control-label">Symbol:</label>
+          <select id="symbol-selector" class="control-select">
+            <option value="SPY">SPY</option>
+            <option value="QQQ">QQQ</option>
+            <option value="IWM">IWM</option>
+          </select>
+        </div>
+        <div class="control-group" id="time-range-control-group">
+          <label for="time-range-selector" class="control-label">Range:</label>
+          <select id="time-range-selector" class="control-select">
+            <option value="1M">1 Month</option>
+            <option value="4M">4 Months</option>
+            <option value="6M" selected>6 Months</option>
+            <option value="1Y">1 Year</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Scenario Controls -->
       <div class="scenario-controls">
-        <input type="text" id="symbol-input" class="symbol-input" placeholder="Symbol (e.g. NVDA)" value="NVDA">
         <select id="scenario-selector" class="scenario-selector">
           <option value="NORMAL">Normal Operation</option>
           <option value="crash_reflex">🚨 The Crash Reflex</option>

@@ -1,8 +1,13 @@
 /**
  * BuriBuri Trading - Frontend Controller
  * 
+ * Market-Aware Data Routing with Historical Validation Support.
  * Handles UI updates and backend API communication.
- * Designed for clarity and maintainability.
+ * 
+ * Data Source Rules (STRICT):
+ * - Market OPEN  → LIVE DATA ONLY (Alpaca + Polygon)
+ * - Market CLOSED → HISTORICAL DATA ONLY (from cache)
+ * - NO demo data. NO silent fallbacks.
  */
 
 // =============================================================================
@@ -15,118 +20,74 @@ const CONFIG = {
 };
 
 // =============================================================================
+// STATE MANAGEMENT
+// =============================================================================
+
+const STATE = {
+    marketStatus: 'UNKNOWN',
+    isMarketOpen: false,
+    dataMode: 'UNKNOWN',
+    dataSource: 'UNKNOWN',
+    selectedSymbol: 'SPY',
+    selectedTimeRange: '6M',
+    availableSymbols: [],
+    availableTimeRanges: {},
+    controlsEnabled: {
+        symbolSelector: false,
+        timeRangeSelector: false
+    }
+};
+
+// =============================================================================
 // MOCK DATA (Used when backend is not available)
 // =============================================================================
 
 const MOCK_DATA = {
-    run_id: "demo-" + Date.now().toString(36),
+    run_id: "historical-" + Date.now().toString(36),
     timestamp: new Date().toISOString(),
-    data_source: "DEMO",
-    profile: "OVERCONCENTRATED_TECH",
+    data_source: "HISTORICAL",
+    profile: "HISTORICAL_VALIDATION",
 
-    // Phase 2: Signals
     signals: {
         volatility_state: "STABLE",
-        news_score: 62,
-        sector_confidence: 58,
+        news_score: 50,
+        sector_confidence: 55,
         atr: 2.34
     },
 
-    // Phase 3: Market Posture
     market_posture: {
-        market_posture: "DEFENSIVE",
+        market_posture: "NEUTRAL",
         risk_level: "MEDIUM",
         reasons: [
-            "Sector concentration exceeds safe threshold",
-            "Volatility regime is stable but confidence is moderate"
+            "Historical validation mode active",
+            "Decision logic being validated over extended periods"
         ]
     },
 
-    // Portfolio State
     portfolio: {
-        total_capital: 1000000,
-        cash: 35000,
-        position_count: 5,
-        avg_vitals: 54,
-        concentration_risk: "HIGH",
-        capital_lockin: "12%"
+        total_capital: 100000,
+        cash: 25000,
+        position_count: 1,
+        avg_vitals: 65,
+        concentration_risk: "LOW",
+        capital_lockin: "NONE"
     },
 
-    // Decisions
     decisions: [
         {
             type: "POSITION",
-            target: "NVDA",
+            target: "SPY",
             action: "MAINTAIN",
-            score: 82,
+            score: 72,
             reasons: [
-                "Strong position vitals (82/100)",
-                "Sector momentum remains positive",
-                "No concentration breach on this position"
-            ]
-        },
-        {
-            type: "POSITION",
-            target: "AMD",
-            action: "TRIM_RISK",
-            score: 31,
-            reasons: [
-                "Position vitals critically low (31/100)",
-                "Contributes to sector over-concentration",
-                "Better opportunities available in other sectors"
-            ]
-        },
-        {
-            type: "POSITION",
-            target: "MSFT",
-            action: "HOLD",
-            score: 65,
-            reasons: [
-                "Moderate vitals score (65/100)",
-                "Stable performance, no immediate action needed"
-            ]
-        },
-        {
-            type: "CANDIDATE",
-            target: "XLE",
-            action: "ALLOCATE",
-            score: 78,
-            reasons: [
-                "Energy sector shows rotation opportunity",
-                "Would reduce TECH concentration",
-                "High projected efficiency (78/100)"
-            ]
-        },
-        {
-            type: "CANDIDATE",
-            target: "MORE_TECH",
-            action: "BLOCK_RISK",
-            score: 85,
-            blocked: true,
-            blocking_guard: "Concentration Guard",
-            reasons: [
-                "High efficiency score (85/100) but blocked",
-                "TECH sector already over-concentrated (82%)",
-                "Safety guardrail prevents additional TECH exposure"
+                "Position vitals stable (72/100)",
+                "Historical data shows consistent behavior",
+                "No concentration breach detected"
             ]
         }
     ],
 
-    // Safety Warnings
-    warnings: [
-        {
-            type: "danger",
-            message: "TECH sector concentration at 82% (limit: 60%)"
-        },
-        {
-            type: "warning",
-            message: "Cash reserves below target (3.5% vs 10% target)"
-        },
-        {
-            type: "info",
-            message: "1 candidate blocked by concentration guard"
-        }
-    ]
+    warnings: []
 };
 
 // =============================================================================
@@ -134,19 +95,27 @@ const MOCK_DATA = {
 // =============================================================================
 
 const elements = {
+    // Data Source Bar
+    dsMarketStatus: document.getElementById('ds-market-status'),
+    dsDataMode: document.getElementById('ds-data-mode'),
+    dsDataSource: document.getElementById('ds-data-source'),
+    dsMessage: document.getElementById('ds-message'),
+    
+    // Market-Aware Controls
+    symbolSelector: document.getElementById('symbol-selector'),
+    timeRangeSelector: document.getElementById('time-range-selector'),
+    symbolControlGroup: document.getElementById('symbol-control-group'),
+    timeRangeControlGroup: document.getElementById('time-range-control-group'),
+    
+    // Data Info Panel
+    infoSymbol: document.getElementById('info-symbol'),
+    infoTimeRange: document.getElementById('info-time-range'),
+    infoCandleCount: document.getElementById('info-candle-count'),
+    infoDateRange: document.getElementById('info-date-range'),
+    
     // Header
     statusBadge: document.getElementById('status-badge'),
     runBtn: document.getElementById('run-btn'),
-    marketStatus: document.getElementById('ui-market-status'),
-    dataFeed: document.getElementById('ui-data-feed'),
-    dataSource: document.getElementById('ui-data-source'),
-    modeDesc: document.getElementById('ui-mode-desc'),
-
-    // Control Selectors
-    symbolSelector: document.getElementById('symbol-selector'),
-    rangeSelector: document.getElementById('range-selector'),
-    scenarioSelector: document.getElementById('scenario-selector'),
-    historicalControls: document.getElementById('historical-controls'),
 
     // Market Overview
     marketPosture: document.getElementById('market-posture'),
@@ -173,174 +142,458 @@ const elements = {
 // UI UPDATE FUNCTIONS
 // =============================================================================
 
+/**
+ * Update the status badge in the header
+ */
 function setStatus(status, text) {
-    elements.statusBadge.className = 'status-badge ' + status;
-    elements.statusBadge.textContent = text;
+    if (elements.statusBadge) {
+        elements.statusBadge.className = 'status-badge ' + status;
+        elements.statusBadge.textContent = text;
+    }
 }
 
 /**
- * Handle Market Transparency Updates
+ * Update the data source status bar
  */
-function updateTransparency(wrapper) {
+function updateDataSourceBar(wrapper) {
     if (!wrapper) return;
 
-    // 1. Market Status (OPEN/CLOSED)
-    const mktStatus = wrapper.market_status?.status || "UNKNOWN";
-    elements.marketStatus.textContent = mktStatus;
-    elements.marketStatus.className = 'status-value highlight ' + mktStatus.toLowerCase();
+    const marketStatus = wrapper.market_status?.label || wrapper.market_status || 'UNKNOWN';
+    const isOpen = wrapper.market_status?.is_open || false;
+    const dataMode = wrapper.data_mode || 'UNKNOWN';
+    const dataSource = wrapper.data_source || 'UNKNOWN';
+    const statusMessage = wrapper.status_message || '';
 
-    // 2. Data Feed Mode
-    elements.dataFeed.textContent = wrapper.data_mode || "—";
-    
-    // 3. Data Source
-    elements.dataSource.textContent = wrapper.portfolio_source || "—";
+    // Update state
+    STATE.marketStatus = marketStatus;
+    STATE.isMarketOpen = isOpen;
+    STATE.dataMode = dataMode;
+    STATE.dataSource = dataSource;
 
-    // 4. Description (Authoritative Wording)
-    const analysis = wrapper.analysis || {};
-    const posture = analysis.market_posture || {};
-    elements.modeDesc.textContent = posture.description || "System operating normally.";
+    // Update Market Status
+    if (elements.dsMarketStatus) {
+        elements.dsMarketStatus.textContent = marketStatus;
+        elements.dsMarketStatus.classList.remove('open', 'closed');
+        elements.dsMarketStatus.classList.add(isOpen ? 'open' : 'closed');
+    }
 
-    // 5. Toggle Historical Controls
-    if (mktStatus === "OPEN") {
-        elements.historicalControls.classList.add('hidden');
-    } else {
-        elements.historicalControls.classList.remove('hidden');
+    // Update Data Mode
+    if (elements.dsDataMode) {
+        elements.dsDataMode.textContent = dataMode;
+        elements.dsDataMode.classList.remove('live', 'historical');
+        elements.dsDataMode.classList.add(dataMode.toLowerCase());
+    }
+
+    // Update Data Source
+    if (elements.dsDataSource) {
+        elements.dsDataSource.textContent = dataSource;
+    }
+
+    // Update Status Message
+    if (elements.dsMessage) {
+        elements.dsMessage.textContent = statusMessage;
     }
 }
 
-function updateMarketOverview(data) {
-    const posture = data.market_posture?.market_posture || 'NEUTRAL';
-    elements.marketPosture.textContent = posture.replace('_', ' ');
-    elements.marketPosture.className = 'metric-value posture ' + posture.toLowerCase();
+/**
+ * Update the market-aware control selectors
+ */
+function updateMarketAwareControls(routingConfig) {
+    if (!routingConfig) return;
 
-    elements.volatilityState.textContent = data.signals?.volatility_state || '—';
-    elements.newsScore.textContent = data.signals?.news_score ? `${data.signals.news_score}/100` : '—';
-    elements.sectorConfidence.textContent = data.signals?.sector_confidence ? `${data.signals.sector_confidence}/100` : '—';
+    const { 
+        selected_symbol, 
+        selected_time_range, 
+        available_symbols, 
+        available_time_ranges,
+        controls_enabled 
+    } = routingConfig;
+
+    // Update state
+    STATE.selectedSymbol = selected_symbol || 'SPY';
+    STATE.selectedTimeRange = selected_time_range || '6M';
+    STATE.availableSymbols = available_symbols || [];
+    STATE.availableTimeRanges = available_time_ranges || {};
+    STATE.controlsEnabled = controls_enabled || {};
+
+    // Update Symbol Selector
+    if (elements.symbolSelector) {
+        // Populate options
+        elements.symbolSelector.innerHTML = '';
+        STATE.availableSymbols.forEach(sym => {
+            const option = document.createElement('option');
+            option.value = sym;
+            option.textContent = sym;
+            if (sym === STATE.selectedSymbol) option.selected = true;
+            elements.symbolSelector.appendChild(option);
+        });
+
+        // Enable/disable based on market status
+        const symbolEnabled = STATE.controlsEnabled.symbol_selector !== false;
+        elements.symbolSelector.disabled = !symbolEnabled;
+        
+        if (elements.symbolControlGroup) {
+            elements.symbolControlGroup.classList.toggle('disabled', !symbolEnabled);
+        }
+    }
+
+    // Update Time Range Selector
+    if (elements.timeRangeSelector) {
+        // Populate options
+        elements.timeRangeSelector.innerHTML = '';
+        Object.entries(STATE.availableTimeRanges).forEach(([key, info]) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = info.label || key;
+            if (key === STATE.selectedTimeRange) option.selected = true;
+            elements.timeRangeSelector.appendChild(option);
+        });
+
+        // Enable/disable based on market status
+        const timeRangeEnabled = STATE.controlsEnabled.time_range_selector !== false;
+        elements.timeRangeSelector.disabled = !timeRangeEnabled;
+        
+        if (elements.timeRangeControlGroup) {
+            elements.timeRangeControlGroup.classList.toggle('disabled', !timeRangeEnabled);
+        }
+    }
 }
 
+/**
+ * Update the data info panel
+ */
+function updateDataInfoPanel(wrapper) {
+    if (!wrapper) return;
+
+    const routingConfig = wrapper.routing_config || {};
+    const metadata = wrapper.data_metadata || {};
+
+    // Selected Symbol
+    if (elements.infoSymbol) {
+        elements.infoSymbol.textContent = routingConfig.selected_symbol || STATE.selectedSymbol || '—';
+    }
+
+    // Time Range
+    if (elements.infoTimeRange) {
+        const timeRange = routingConfig.selected_time_range || STATE.selectedTimeRange;
+        const label = STATE.availableTimeRanges[timeRange]?.label || timeRange || '—';
+        elements.infoTimeRange.textContent = STATE.isMarketOpen ? 'Live' : label;
+    }
+
+    // Candle Count
+    if (elements.infoCandleCount) {
+        elements.infoCandleCount.textContent = metadata.candle_count || '—';
+    }
+
+    // Date Range
+    if (elements.infoDateRange) {
+        if (metadata.data_start && metadata.data_end) {
+            elements.infoDateRange.textContent = `${metadata.data_start} → ${metadata.data_end}`;
+        } else if (STATE.isMarketOpen) {
+            elements.infoDateRange.textContent = 'Real-time';
+        } else {
+            elements.infoDateRange.textContent = '—';
+        }
+    }
+}
+
+/**
+ * Render Scenario Badges and Description
+ */
+function updateScenarioBadges(data) {
+    const container = document.getElementById('scenario-badges');
+    if (!container) return;
+
+    const scenario = data.scenario_meta || {};
+
+    if (scenario.badges && scenario.badges.length > 0) {
+        const badgesHtml = scenario.badges.map(b =>
+            `<span class="scenario-badge">✔ ${b}</span>`
+        ).join('');
+
+        let descHtml = '';
+        if (scenario.description) {
+            descHtml = `<div class="scenario-desc">${scenario.header_emoji || ''} ${scenario.description}</div>`;
+        }
+
+        container.innerHTML = descHtml + `<div class="badges-row">${badgesHtml}</div>`;
+        container.classList.add('visible');
+    } else {
+        container.innerHTML = '';
+        container.classList.remove('visible');
+    }
+}
+
+/**
+ * Update market overview panel
+ */
+function updateMarketOverview(data) {
+    // Market Posture
+    const posture = data.market_posture?.market_posture || 'NEUTRAL';
+    if (elements.marketPosture) {
+        elements.marketPosture.textContent = posture.replace('_', ' ');
+        elements.marketPosture.className = 'metric-value posture ' + posture.toLowerCase();
+    }
+
+    // Signals
+    if (elements.volatilityState) {
+        elements.volatilityState.textContent = data.signals?.volatility_state || '—';
+    }
+    if (elements.newsScore) {
+        elements.newsScore.textContent = data.signals?.news_score ?
+            `${data.signals.news_score}/100` : '—';
+    }
+    if (elements.sectorConfidence) {
+        elements.sectorConfidence.textContent = data.signals?.sector_confidence ?
+            `${data.signals.sector_confidence}/100` : '—';
+    }
+}
+
+/**
+ * Update portfolio health panel
+ */
 function updatePortfolioHealth(data) {
     const portfolio = data.portfolio || {};
-    elements.positionCount.textContent = portfolio.position_count || '0';
 
+    if (elements.positionCount) {
+        elements.positionCount.textContent = portfolio.position_count || '—';
+    }
+
+    // Avg Vitals with color coding
     const avgVitals = portfolio.avg_vitals;
-    if (avgVitals !== undefined) {
-        elements.avgVitals.textContent = `${avgVitals}/100`;
-        elements.avgVitals.className = 'health-value ' + getScoreClass(avgVitals);
+    if (elements.avgVitals) {
+        if (avgVitals !== undefined) {
+            elements.avgVitals.textContent = `${avgVitals}/100`;
+            elements.avgVitals.className = 'health-value ' + getScoreClass(avgVitals);
+        } else {
+            elements.avgVitals.textContent = '—';
+        }
     }
 
-    elements.capitalLockin.textContent = portfolio.capital_lockin || 'NONE';
+    if (elements.capitalLockin) {
+        elements.capitalLockin.textContent = portfolio.capital_lockin || '—';
+    }
 
+    // Concentration Risk with color coding
     const risk = portfolio.concentration_risk;
-    if (risk) {
-        elements.concentrationRisk.textContent = risk;
-        elements.concentrationRisk.className = 'health-value ' + getRiskClass(risk);
+    if (elements.concentrationRisk) {
+        if (risk) {
+            elements.concentrationRisk.textContent = risk;
+            elements.concentrationRisk.className = 'health-value ' + getRiskClass(risk);
+        } else {
+            elements.concentrationRisk.textContent = '—';
+        }
     }
 }
 
+/**
+ * Render decision cards
+ */
 function renderDecisions(decisions) {
-    const feed = elements.decisionFeed;
-    const empty = elements.emptyDecisions;
+    if (!elements.decisionFeed) return;
     
-    // Clear existing
-    const cards = feed.querySelectorAll('.decision-card');
-    cards.forEach(c => c.remove());
-
     if (!decisions || decisions.length === 0) {
-        empty.classList.remove('hidden');
+        if (elements.emptyDecisions) elements.emptyDecisions.classList.remove('hidden');
         return;
     }
 
-    empty.classList.add('hidden');
-    decisions.forEach(d => {
-        const card = document.createElement('div');
-        card.className = 'decision-card' + (d.blocked ? ' blocked-action' : '');
-        
-        const actionClass = (d.action || '').toLowerCase().replace(/\s+/g, '_');
-        const reasons = d.reasons || [];
+    if (elements.emptyDecisions) elements.emptyDecisions.classList.add('hidden');
 
-        card.innerHTML = `
-            <div class="decision-header">
-                <div class="decision-target">
-                    <span class="decision-symbol">${d.target}</span>
-                    <span class="decision-type">${d.type}</span>
-                </div>
-                <span class="decision-action ${actionClass}">${d.action.replace('_', ' ')}</span>
-            </div>
-            ${d.blocked ? `<div class="blocked-reason">⛔ Blocked by ${d.blocking_guard || 'Safety Guard'}</div>` : ''}
-            <div class="decision-reasons">
-                <div class="decision-reasons-title">Logic Justification</div>
-                <ul class="decision-reasons-list">
-                    ${reasons.map(r => `<li>${r}</li>`).join('')}
-                </ul>
-            </div>
-            <div class="decision-score">Confidence Score: ${d.score}/100</div>
-        `;
-        feed.appendChild(card);
+    // Clear existing decisions
+    const existingCards = elements.decisionFeed.querySelectorAll('.decision-card');
+    existingCards.forEach(card => card.remove());
+
+    // Render each decision
+    decisions.forEach(decision => {
+        const card = createDecisionCard(decision);
+        elements.decisionFeed.appendChild(card);
     });
 }
 
+/**
+ * Create a single decision card element
+ */
+function createDecisionCard(decision) {
+    const card = document.createElement('div');
+    card.className = 'decision-card' + (decision.blocked ? ' blocked-action' : '');
+
+    const actionClass = getActionClass(decision.action);
+    const reasons = decision.reasons || [];
+
+    card.innerHTML = `
+        <div class="decision-header">
+            <div class="decision-target">
+                <span class="decision-symbol">${decision.target}</span>
+                <span class="decision-type">${decision.type}</span>
+            </div>
+            <span class="decision-action ${actionClass}">${decision.action.replace('_', ' ')}</span>
+        </div>
+        ${decision.blocked ? `<div class="blocked-reason">⛔ Blocked by ${decision.blocking_guard || 'Safety Guard'}</div>` : ''}
+        <div class="decision-reasons">
+            <div class="decision-reasons-title">Reasoning</div>
+            <ul class="decision-reasons-list">
+                ${reasons.map(r => `<li>${r}</li>`).join('')}
+            </ul>
+        </div>
+        <div class="decision-score">Confidence Score: ${decision.score}/100</div>
+    `;
+
+    return card;
+}
+
+/**
+ * Render warnings list
+ */
 function renderWarnings(warnings) {
-    const list = elements.warningsList;
-    const empty = elements.emptyWarnings;
+    if (!elements.warningsList) return;
     
-    const items = list.querySelectorAll('.warning-item');
-    items.forEach(i => i.remove());
-
     if (!warnings || warnings.length === 0) {
-        empty.classList.remove('hidden');
+        if (elements.emptyWarnings) elements.emptyWarnings.classList.remove('hidden');
         return;
     }
 
-    empty.classList.add('hidden');
-    warnings.forEach(w => {
+    if (elements.emptyWarnings) elements.emptyWarnings.classList.add('hidden');
+
+    // Clear existing warnings
+    const existingItems = elements.warningsList.querySelectorAll('.warning-item');
+    existingItems.forEach(item => item.remove());
+
+    // Render each warning
+    warnings.forEach(warning => {
         const item = document.createElement('div');
-        item.className = 'warning-item ' + (w.type || 'info');
-        
-        const icon = w.type === 'danger' ? '🚨' : w.type === 'warning' ? '⚠️' : 'ℹ️';
-        item.innerHTML = `<span class="warning-icon">${icon}</span><span class="warning-text">${w.message}</span>`;
-        list.appendChild(item);
+        item.className = 'warning-item ' + (warning.type || 'info');
+
+        const icon = getWarningIcon(warning.type);
+        item.innerHTML = `
+            <span class="warning-icon">${icon}</span>
+            <span class="warning-text">${warning.message}</span>
+        `;
+
+        elements.warningsList.appendChild(item);
     });
 }
 
 // =============================================================================
-// HELPERS
+// HELPER FUNCTIONS
 // =============================================================================
 
-function getScoreClass(s) { return s >= 65 ? 'positive' : s >= 40 ? 'warning' : 'danger'; }
-function getRiskClass(r) { 
-    r = r.toLowerCase();
-    return (r === 'low' || r === 'none') ? 'positive' : (r === 'medium' || r === 'moderate') ? 'warning' : 'danger'; 
+function getScoreClass(score) {
+    if (score >= 65) return 'positive';
+    if (score >= 40) return 'warning';
+    return 'danger';
+}
+
+function getRiskClass(risk) {
+    const r = (risk || '').toLowerCase();
+    if (r === 'low' || r === 'none') return 'positive';
+    if (r === 'medium' || r === 'moderate') return 'warning';
+    return 'danger';
+}
+
+function getActionClass(action) {
+    return (action || '').toLowerCase().replace(/\s+/g, '_');
+}
+
+function getWarningIcon(type) {
+    switch (type) {
+        case 'danger': return '🚨';
+        case 'warning': return '⚠️';
+        case 'success': return '✅';
+        default: return 'ℹ️';
+    }
 }
 
 // =============================================================================
 // API COMMUNICATION
 // =============================================================================
 
-// =============================================================================
-// API COMMUNICATION
-// =============================================================================
+/**
+ * Fetch the current market status and routing configuration
+ */
+async function fetchStatus() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/status`);
+        if (!response.ok) throw new Error(`Status API Error: ${response.status}`);
+        return await response.json();
+    } catch (error) {
+        console.error('Failed to fetch status:', error);
+        return null;
+    }
+}
+
+/**
+ * Set the selected symbol (historical mode only)
+ */
+async function setSymbol(symbol) {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/set-symbol`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to set symbol');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Failed to set symbol:', error);
+        throw error;
+    }
+}
+
+/**
+ * Set the selected time range (historical mode only)
+ */
+async function setTimeRange(timeRange) {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/set-time-range`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ time_range: timeRange })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to set time range');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Failed to set time range:', error);
+        throw error;
+    }
+}
 
 /**
  * Fetch analysis data from backend
  */
 async function fetchAnalysis() {
     if (CONFIG.MOCK_MODE) {
-        // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 800));
         return {
             analysis: MOCK_DATA,
-            market_status: { label: "MOCK", is_open: false, timestamp: new Date().toISOString() },
-            data_mode: "MOCK"
+            market_status: { label: "CLOSED", is_open: false, timestamp: new Date().toISOString() },
+            data_mode: "HISTORICAL",
+            data_source: "Alpaca Historical Cache",
+            routing_config: {
+                selected_symbol: "SPY",
+                selected_time_range: "6M",
+                available_symbols: ["SPY", "QQQ", "IWM"],
+                available_time_ranges: { "1M": {label: "1 Month"}, "4M": {label: "4 Months"}, "6M": {label: "6 Months"}, "1Y": {label: "1 Year"} },
+                controls_enabled: { symbol_selector: true, time_range_selector: true }
+            },
+            status_message: "Market is closed. System is operating on Alpaca historical market data to validate decision logic over extended periods."
         };
     }
 
-    const selector = document.getElementById("scenario-selector");
-    const scenario = selector ? selector.value : "NORMAL";
+    const scenario = document.getElementById("scenario-selector")?.value || "NORMAL";
+    const symbol = STATE.selectedSymbol;
+    const timeRange = STATE.selectedTimeRange;
 
-    const symbolInput = document.getElementById("symbol-input");
-    const symbol = symbolInput ? symbolInput.value : "";
+    let url = `${CONFIG.API_BASE}/run?scenario=${scenario}`;
+    if (symbol) url += `&symbol=${symbol}`;
+    if (timeRange) url += `&time_range=${timeRange}`;
 
-    const response = await fetch(`${CONFIG.API_BASE}/run?scenario=${scenario}&symbol=${symbol}`, {
+    const response = await fetch(url, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
     });
@@ -352,94 +605,67 @@ async function fetchAnalysis() {
     return await response.json();
 }
 
-/**
- * Update Market Status Badge and Message
- */
-function updateMarketStatus(wrapper) {
-    if (!wrapper || !wrapper.market_status) return;
-
-    const status = wrapper.market_status;
-    const isClosed = !status.is_open;
-    const badge = document.getElementById('status-badge');
-
-    // Update Badge
-    if (badge) {
-        badge.textContent = status.label || (status.is_open ? "OPEN" : "CLOSED");
-        badge.className = 'status-badge ' + (status.is_open ? 'success' : 'danger');
-    }
-
-    // Show Historical Data Warning if Closed AND not already a scenario
-    // If it is a scenario (wrapper.data_mode == "SCENARIO"), that takes precedence.
-    const mode = wrapper.data_mode || "UNKNOWN";
-    const source = wrapper.portfolio_source || "UNKNOWN";
-
-    let message = "";
-    if (mode === "HISTORICAL") {
-        message = `Live Market Closed. Using Historical Data for ${wrapper.symbols_used?.[0] || 'Analysis'}.`;
-    } else if (mode === "LIVE") {
-        message = `Live Market Data. Connected to Alpaca & Polygon.`;
-    } else if (mode === "SCENARIO") {
-        message = "Scenario Simulation Active.";
-    }
-
-    // Inject message into header or overview
-    // We can use the existing 'scenario-badges' container if empty, or prepend to it
-    // Or just set the tooltip title of the badge?
-    if (badge) badge.title = message + ` \nSource: ${source}`;
-
-    // Also log to console for demo clarity
-    console.log(`[System] Mode: ${mode} | Status: ${status.label} | Source: ${source}`);
-}
-
 // =============================================================================
 // MAIN RUN HANDLER
 // =============================================================================
 
 async function runAnalysis() {
     try {
-        setStatus('running', 'Analyzing...');
-        elements.runBtn.disabled = true;
-        elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+        // Update UI to running state
+        setStatus('running', 'Running...');
+        if (elements.runBtn) {
+            elements.runBtn.disabled = true;
+            elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+        }
 
         // Fetch data
         const wrapper = await fetchAnalysis();
-        const data = wrapper.analysis || wrapper; // Fallback for safety
+        const data = wrapper.analysis || wrapper;
 
-        // 1. Transparency Bar
-        updateTransparency(wrapper);
+        // Update Data Source Bar (ALWAYS VISIBLE)
+        updateDataSourceBar(wrapper);
 
-        // 2. Panels
+        // Update Market-Aware Controls
+        updateMarketAwareControls(wrapper.routing_config);
+
+        // Update Data Info Panel
+        updateDataInfoPanel(wrapper);
+
+        // Update all panels
+        updateScenarioBadges(data);
         updateMarketOverview(data);
         updatePortfolioHealth(data);
         renderDecisions(data.decisions);
 
         // Handle Warnings
-        // Analysis might have warnings, or we might add system warnings
         const warnings = data.warnings || [];
+        
+        // Add system info for historical mode
         if (wrapper.market_status && !wrapper.market_status.is_open && wrapper.data_mode === "HISTORICAL") {
             warnings.unshift({
-                type: 'warning',
-                message: `Market is CLOSED. Using historical data (Polygon.io).`
+                type: 'info',
+                message: `Validation Mode: Analyzing ${wrapper.routing_config?.selected_symbol || 'symbol'} with ${wrapper.routing_config?.selected_time_range || ''} of historical data from Alpaca.`
             });
         }
         renderWarnings(warnings);
 
-        // Update status text (bottom controller)
+        // Update status
         setStatus('complete', 'Complete');
 
     } catch (error) {
         console.error('Analysis failed:', error);
         setStatus('error', 'Error');
 
-        // Show error in warnings
         renderWarnings([{
             type: 'danger',
-            message: `Failed to connect to backend. ${CONFIG.MOCK_MODE ? 'Using mock data.' : 'Ensure Flask is running.'} (${error.message})`
+            message: `Failed to connect to backend. Ensure Flask is running on port 5001. (${error.message})`
         }]);
 
     } finally {
-        elements.runBtn.disabled = false;
-        elements.runBtn.textContent = 'Run Analysis';
+        if (elements.runBtn) {
+            elements.runBtn.disabled = false;
+            elements.runBtn.textContent = 'Run Analysis';
+        }
     }
 }
 
@@ -457,14 +683,11 @@ async function handleSymbolChange(event) {
         setStatus('running', 'Switching symbol...');
         await setSymbol(symbol);
         STATE.selectedSymbol = symbol;
-        
-        // Auto-run analysis with new symbol
         await runAnalysis();
     } catch (error) {
         console.error('Symbol change failed:', error);
         setStatus('error', 'Error');
         
-        // Revert selector to previous value
         if (elements.symbolSelector) {
             elements.symbolSelector.value = STATE.selectedSymbol;
         }
@@ -486,14 +709,11 @@ async function handleTimeRangeChange(event) {
         setStatus('running', 'Switching time range...');
         await setTimeRange(timeRange);
         STATE.selectedTimeRange = timeRange;
-        
-        // Auto-run analysis with new time range
         await runAnalysis();
     } catch (error) {
         console.error('Time range change failed:', error);
         setStatus('error', 'Error');
         
-        // Revert selector to previous value
         if (elements.timeRangeSelector) {
             elements.timeRangeSelector.value = STATE.selectedTimeRange;
         }
@@ -515,7 +735,6 @@ async function handleTimeRangeChange(event) {
 async function initializeApp() {
     console.log('[BuriBuri] Initializing Market-Aware Trading System...');
     
-    // Fetch initial status to configure controls
     try {
         const status = await fetchStatus();
         if (status) {
@@ -535,9 +754,23 @@ async function initializeApp() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize the app
+    initializeApp();
+    
     // Bind run button
-    elements.runBtn.addEventListener('click', runAnalysis);
-
-    console.log('BuriBuri Trading UI initialized');
-    console.log('Mock mode:', CONFIG.MOCK_MODE);
+    if (elements.runBtn) {
+        elements.runBtn.addEventListener('click', runAnalysis);
+    }
+    
+    // Bind symbol selector
+    if (elements.symbolSelector) {
+        elements.symbolSelector.addEventListener('change', handleSymbolChange);
+    }
+    
+    // Bind time range selector
+    if (elements.timeRangeSelector) {
+        elements.timeRangeSelector.addEventListener('change', handleTimeRangeChange);
+    }
+    
+    console.log('[BuriBuri] UI initialized. Mock mode:', CONFIG.MOCK_MODE);
 });
