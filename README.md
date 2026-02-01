@@ -10,7 +10,7 @@
 
 ### Who This MVP Is For
 
-This prototype is designed for **hackathon judges, reviewers, and developers** who want to explore an explainable, rule-based portfolio decision engine. It demonstrates risk-aware capital allocation logic without requiring real trading credentials.
+This prototype is designed for **hackathon judges, reviewers, and developers** who want to explore an explainable, rule-based portfolio decision engine. It demonstrates risk-aware capital allocation logic without requiring real trading credentials.The Market is open from 9:30 AM to 4:00 PM ET.
 
 ### Prerequisites
 
