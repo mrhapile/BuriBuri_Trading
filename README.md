@@ -6,24 +6,6 @@
 > _(Hackathon Prototype — Do not use with real assets.)_
 
 ---
-
-## 📊 Project Status
-
-| Phase | Description | Status |
-|:------|:------------|:------:|
-| Phase 1 | Data ingestion (Alpaca / Historical) | ✅ Complete |
-| Phase 2 | Signal computation | ✅ Complete |
-| Phase 3 | Decision engine | ✅ Complete |
-| Phase 4 | Risk guardrails | ✅ Complete |
-| Phase 5 | Execution planning (Advisory) | ✅ Complete |
-| Phase 6 | Frontend dashboard | ✅ Complete |
-| Phase 7 | Trade execution | ❌ Disabled (by design) |
-
-**Completion:** ~90% — Full decision pipeline with market-aware data routing is functional.  
-**Note:** Execution is intentionally disabled. This system produces *advisory decisions*, not trades.
-
----
-
 ## 🏁 Getting Started
 
 ### Who This MVP Is For
