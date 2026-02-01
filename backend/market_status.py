@@ -51,6 +51,6 @@ def get_market_status():
             "is_open": False,
             "next_open": None,
             "next_close": None,
-            "label": "CLOSED (Error)",
+            "label": "CLOSED",
             "timestamp": datetime.now().isoformat()
         }
