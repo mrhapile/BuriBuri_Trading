@@ -207,7 +207,7 @@ def run_agent():
         if scenario == "NORMAL" or scenario == "":
             scenario = None
             
-        result = run_demo_scenario(scenario_id=scenario, symbol=symbol)
+        result = run_market_aware_analysis(scenario_id=scenario, symbol=symbol, time_range=time_range)
         return jsonify(result)
     except Exception as e:
         import traceback

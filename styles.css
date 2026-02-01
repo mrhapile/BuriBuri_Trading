@@ -84,23 +84,18 @@ body {
 .header {
     background: var(--bg-white);
     border-bottom: 1px solid var(--border-light);
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.header-top {
     padding: var(--space-md) var(--space-xl);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--border-light);
+    gap: var(--space-lg);
 }
 
 .header-content {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
+    gap: 2px;
+    flex-shrink: 0;
 }
 
 /* Status Bar */
@@ -206,6 +201,19 @@ body {
     display: flex;
     align-items: center;
     gap: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.market-aware-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.scenario-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
 }
 
 .status-badge {
@@ -783,24 +791,23 @@ body {
 }
 
 /* =============================================================================
-   MARKET-AWARE CONTROLS
+   MARKET-AWARE CONTROLS (in header)
    ============================================================================= */
-.market-aware-controls {
+.header .market-aware-controls {
     display: flex;
     align-items: center;
     gap: var(--space-md);
     padding-right: var(--space-md);
     border-right: 1px solid var(--border-light);
-    margin-right: var(--space-md);
 }
 
-.control-group {
+.header .control-group {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
-.control-label {
+.header .control-label {
     font-size: 0.625rem;
     font-weight: 600;
     color: var(--text-muted);
