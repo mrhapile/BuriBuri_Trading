@@ -997,3 +997,201 @@ body {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+/* =============================================================================
+   UPGRADE 2: CRASH TOGGLE
+   ============================================================================= */
+.crash-toggle-container {
+    display: flex;
+    align-items: center;
+}
+
+.crash-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    cursor: pointer;
+    user-select: none;
+}
+
+.crash-toggle input {
+    display: none;
+}
+
+.crash-toggle-slider {
+    width: 40px;
+    height: 22px;
+    background: var(--border-medium);
+    border-radius: 11px;
+    position: relative;
+    transition: background 0.3s ease;
+}
+
+.crash-toggle-slider::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: white;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.crash-toggle input:checked + .crash-toggle-slider {
+    background: #dc3545;
+}
+
+.crash-toggle input:checked + .crash-toggle-slider::after {
+    transform: translateX(18px);
+}
+
+.crash-toggle-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.crash-toggle input:checked ~ .crash-toggle-label {
+    color: #dc3545;
+}
+
+/* =============================================================================
+   UPGRADE 1: AGENT MEMORY PANEL
+   ============================================================================= */
+.memory-insight {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.memory-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.memory-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.memory-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.trend-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    display: inline-block;
+    width: fit-content;
+}
+
+.trend-badge.increasing {
+    background: #fce8e8;
+    color: #dc3545;
+}
+
+.trend-badge.decreasing {
+    background: #e8f5e9;
+    color: #1a7f37;
+}
+
+.trend-badge.stable {
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+}
+
+.trend-badge.first-run {
+    background: var(--accent-blue-light);
+    color: var(--accent-blue);
+}
+
+.memory-message {
+    font-size: 0.875rem;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+}
+
+.memory-message.risk-increasing {
+    background: #fce8e8;
+    color: #dc3545;
+    border-left: 3px solid #dc3545;
+}
+
+.memory-message.risk-decreasing {
+    background: #e8f5e9;
+    color: #1a7f37;
+    border-left: 3px solid #1a7f37;
+}
+
+/* =============================================================================
+   UPGRADE 3: BRAIN LOG PANEL
+   ============================================================================= */
+.brain-log-container {
+    background: #1e1e1e;
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.brain-log {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: #d4d4d4;
+}
+
+.brain-log-entry {
+    padding: 4px 0;
+    opacity: 0;
+    animation: fadeInLog 0.3s ease forwards;
+}
+
+@keyframes fadeInLog {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.brain-thinking {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: #808080;
+}
+
+.thinking-indicator {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+.thinking-text {
+    font-style: italic;
+}
+
+.brain-log-entry.signal { color: #4fc3f7; }
+.brain-log-entry.decision { color: #81c784; }
+.brain-log-entry.warning { color: #ffb74d; }
+.brain-log-entry.blocked { color: #e57373; }
+.brain-log-entry.info { color: #d4d4d4; }

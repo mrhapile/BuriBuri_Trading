@@ -135,7 +135,21 @@ const elements = {
 
     // Warnings
     warningsList: document.getElementById('warnings-list'),
-    emptyWarnings: document.getElementById('empty-warnings')
+    emptyWarnings: document.getElementById('empty-warnings'),
+    
+    // UPGRADE 2: Crash Toggle
+    crashToggle: document.getElementById('crash-toggle'),
+    
+    // UPGRADE 1: Agent Memory
+    memPrevPosture: document.getElementById('mem-prev-posture'),
+    memPrevRisk: document.getElementById('mem-prev-risk'),
+    memCurrRisk: document.getElementById('mem-curr-risk'),
+    memTrend: document.getElementById('mem-trend'),
+    memoryMessage: document.getElementById('memory-message'),
+    
+    // UPGRADE 3: Brain Log
+    brainLog: document.getElementById('brain-log'),
+    brainThinking: document.getElementById('brain-thinking')
 };
 
 // =============================================================================
@@ -483,6 +497,153 @@ function getScoreClass(score) {
     return 'danger';
 }
 
+// =============================================================================
+// UPGRADE 1: AGENT MEMORY
+// =============================================================================
+
+/**
+ * Update the agent memory panel with trend insights
+ */
+function updateMemoryPanel(memory) {
+    if (!memory) return;
+    
+    const { previous_posture, previous_risk, current_risk, trend } = memory;
+    
+    // Update values
+    if (elements.memPrevPosture) {
+        elements.memPrevPosture.textContent = previous_posture || 'First Run';
+    }
+    if (elements.memPrevRisk) {
+        elements.memPrevRisk.textContent = previous_risk || '—';
+    }
+    if (elements.memCurrRisk) {
+        elements.memCurrRisk.textContent = current_risk || '—';
+    }
+    
+    // Update trend badge
+    if (elements.memTrend) {
+        elements.memTrend.textContent = formatTrend(trend);
+        elements.memTrend.className = 'memory-value trend-badge ' + getTrendClass(trend);
+    }
+    
+    // Update message
+    if (elements.memoryMessage) {
+        const message = getTrendMessage(trend, previous_risk, current_risk);
+        elements.memoryMessage.textContent = message;
+        elements.memoryMessage.className = 'memory-message ' + getTrendMessageClass(trend);
+    }
+}
+
+function formatTrend(trend) {
+    switch (trend) {
+        case 'RISK_INCREASING': return '📈 INCREASING';
+        case 'RISK_DECREASING': return '📉 DECREASING';
+        case 'STABLE': return '➡️ STABLE';
+        case 'FIRST_RUN': return '🆕 FIRST RUN';
+        default: return trend || '—';
+    }
+}
+
+function getTrendClass(trend) {
+    switch (trend) {
+        case 'RISK_INCREASING': return 'increasing';
+        case 'RISK_DECREASING': return 'decreasing';
+        case 'STABLE': return 'stable';
+        case 'FIRST_RUN': return 'first-run';
+        default: return '';
+    }
+}
+
+function getTrendMessage(trend, prevRisk, currRisk) {
+    switch (trend) {
+        case 'RISK_INCREASING':
+            return `⚠️ Risk has INCREASED since last analysis (${prevRisk} → ${currRisk}). Agent is more cautious.`;
+        case 'RISK_DECREASING':
+            return `✅ Risk has DECREASED since last analysis (${prevRisk} → ${currRisk}). Conditions improving.`;
+        case 'STABLE':
+            return `➡️ Risk level remains STABLE at ${currRisk}. No significant change detected.`;
+        case 'FIRST_RUN':
+            return `🆕 This is the agent's first analysis. Memory baseline established.`;
+        default:
+            return '';
+    }
+}
+
+function getTrendMessageClass(trend) {
+    switch (trend) {
+        case 'RISK_INCREASING': return 'risk-increasing';
+        case 'RISK_DECREASING': return 'risk-decreasing';
+        default: return '';
+    }
+}
+
+// =============================================================================
+// UPGRADE 3: BRAIN LOG
+// =============================================================================
+
+/**
+ * Render the brain log with animated entries
+ */
+function renderBrainLog(thoughtLog) {
+    if (!elements.brainLog) return;
+    
+    // Clear existing entries except thinking indicator
+    const existingEntries = elements.brainLog.querySelectorAll('.brain-log-entry');
+    existingEntries.forEach(entry => entry.remove());
+    
+    // Hide thinking indicator
+    if (elements.brainThinking) {
+        elements.brainThinking.style.display = 'none';
+    }
+    
+    if (!thoughtLog || thoughtLog.length === 0) {
+        if (elements.brainThinking) {
+            elements.brainThinking.style.display = 'flex';
+        }
+        return;
+    }
+    
+    // Add entries with staggered animation
+    thoughtLog.forEach((thought, index) => {
+        const entry = document.createElement('div');
+        entry.className = 'brain-log-entry ' + getThoughtClass(thought);
+        entry.textContent = thought;
+        entry.style.animationDelay = `${index * 50}ms`;
+        elements.brainLog.appendChild(entry);
+    });
+    
+    // Auto-scroll to bottom
+    elements.brainLog.scrollTop = elements.brainLog.scrollHeight;
+}
+
+function getThoughtClass(thought) {
+    if (thought.includes('BLOCKED') || thought.includes('🚫')) return 'blocked';
+    if (thought.includes('⚠️') || thought.includes('WARNING')) return 'warning';
+    if (thought.includes('✅') || thought.includes('approved')) return 'decision';
+    if (thought.includes('📊') || thought.includes('📈') || thought.includes('📉')) return 'signal';
+    return 'info';
+}
+
+/**
+ * Show thinking animation before analysis
+ */
+function showThinking() {
+    if (!elements.brainLog) return;
+    
+    // Clear existing entries
+    const existingEntries = elements.brainLog.querySelectorAll('.brain-log-entry');
+    existingEntries.forEach(entry => entry.remove());
+    
+    // Show thinking indicator
+    if (elements.brainThinking) {
+        elements.brainThinking.style.display = 'flex';
+        const thinkingText = elements.brainThinking.querySelector('.thinking-text');
+        if (thinkingText) {
+            thinkingText.textContent = 'Agent is thinking...';
+        }
+    }
+}
+
 function getRiskClass(risk) {
     const r = (risk || '').toLowerCase();
     if (r === 'low' || r === 'none') return 'positive';
@@ -581,6 +742,8 @@ async function fetchAnalysis() {
                 available_time_ranges: { "1M": {label: "1 Month"}, "4M": {label: "4 Months"}, "6M": {label: "6 Months"}, "1Y": {label: "1 Year"} },
                 controls_enabled: { symbol_selector: true, time_range_selector: true }
             },
+            memory: { previous_posture: null, previous_risk: null, current_risk: "MEDIUM", trend: "FIRST_RUN" },
+            thought_log: ["🧠 Mock mode active", "📊 Using simulated data"],
             status_message: "Market is closed. System is operating on Alpaca historical market data to validate decision logic over extended periods."
         };
     }
@@ -588,14 +751,23 @@ async function fetchAnalysis() {
     const scenario = document.getElementById("scenario-selector")?.value || "NORMAL";
     const symbol = STATE.selectedSymbol;
     const timeRange = STATE.selectedTimeRange;
+    
+    // UPGRADE 2: Get crash toggle state
+    const simulateCrash = elements.crashToggle?.checked || false;
 
-    let url = `${CONFIG.API_BASE}/run?scenario=${scenario}`;
-    if (symbol) url += `&symbol=${symbol}`;
-    if (timeRange) url += `&time_range=${timeRange}`;
-
-    const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
+    // Use POST to send crash simulation flag
+    const response = await fetch(`${CONFIG.API_BASE}/run`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json' 
+        },
+        body: JSON.stringify({
+            scenario: scenario,
+            symbol: symbol,
+            time_range: timeRange,
+            simulate_crash: simulateCrash
+        })
     });
 
     if (!response.ok) {
@@ -617,6 +789,9 @@ async function runAnalysis() {
             elements.runBtn.disabled = true;
             elements.runBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
         }
+        
+        // UPGRADE 3: Show thinking animation
+        showThinking();
 
         // Fetch data
         const wrapper = await fetchAnalysis();
@@ -636,9 +811,23 @@ async function runAnalysis() {
         updateMarketOverview(data);
         updatePortfolioHealth(data);
         renderDecisions(data.decisions);
+        
+        // UPGRADE 1: Update Memory Panel
+        updateMemoryPanel(wrapper.memory);
+        
+        // UPGRADE 3: Update Brain Log
+        renderBrainLog(wrapper.thought_log);
 
         // Handle Warnings
         const warnings = data.warnings || [];
+        
+        // Add crash simulation warning if active
+        if (wrapper.crash_simulation_active) {
+            warnings.unshift({
+                type: 'danger',
+                message: '🚨 Market Crash Simulation Active — All aggressive allocations are blocked.'
+            });
+        }
         
         // Add system info for historical mode
         if (wrapper.market_status && !wrapper.market_status.is_open && wrapper.data_mode === "HISTORICAL") {

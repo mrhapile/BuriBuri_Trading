@@ -8,10 +8,17 @@ Data Source Rules (STRICT):
 - Market OPEN  → LIVE DATA ONLY (Alpaca + Polygon)
 - Market CLOSED → HISTORICAL DATA ONLY (from cache)
 - NO demo data. NO silent fallbacks. NO mixing sources.
+
+Living AI Agent Features:
+- Agent Memory: Remembers previous runs for continuity
+- Market Crash Toggle: Simulate extreme conditions
+- Brain Log: Expose internal reasoning
 """
 
 import sys
 import os
+import json
+from datetime import datetime
 
 # Add parent directory to path to import project modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,6 +43,50 @@ from historical_data_service import (
 from market_aware_runner import run_market_aware_analysis
 
 api = Blueprint("api", __name__)
+
+# =============================================================================
+# AGENT MEMORY (UPGRADE 1)
+# =============================================================================
+
+MEMORY_FILE = os.path.join(os.path.dirname(__file__), "agent_memory.json")
+
+
+def load_agent_memory() -> dict:
+    """Load previous run memory from persistent storage."""
+    try:
+        if os.path.exists(MEMORY_FILE):
+            with open(MEMORY_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"⚠️ Failed to load agent memory: {e}")
+    return {"last_run": None}
+
+
+def save_agent_memory(memory: dict):
+    """Persist current run to memory file."""
+    try:
+        with open(MEMORY_FILE, "w") as f:
+            json.dump(memory, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Failed to save agent memory: {e}")
+
+
+def compute_risk_trend(previous_risk: str, current_risk: str) -> str:
+    """
+    Compute risk trend based on previous and current risk levels.
+    
+    Returns:
+        RISK_INCREASING, RISK_DECREASING, or STABLE
+    """
+    risk_order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+    prev_val = risk_order.get(previous_risk, 1)
+    curr_val = risk_order.get(current_risk, 1)
+    
+    if curr_val > prev_val:
+        return "RISK_INCREASING"
+    elif curr_val < prev_val:
+        return "RISK_DECREASING"
+    return "STABLE"
 
 
 # =============================================================================
@@ -190,24 +241,117 @@ def time_ranges():
 # ANALYSIS ENDPOINTS
 # =============================================================================
 
-@api.route("/run", methods=["GET"])
+@api.route("/run", methods=["GET", "POST"])
 def run_agent():
     """
-    Executes Phase 2 → Phase 4 pipeline using mock inputs.
+    Executes Phase 2 → Phase 4 pipeline.
     Returns JSON only.
     
-    This is a READ-ONLY endpoint. No side effects.
+    Living AI Agent features:
+    - Reads previous run from memory
+    - Computes risk trend
+    - Supports crash simulation override
+    - Returns thought log for transparency
+    
+    Query Params (GET) or JSON Body (POST):
+        scenario: Optional scenario override
+        symbol: Symbol to analyze
+        time_range: Time range for historical data
+        simulate_crash: If true, forces defensive posture
     """
     try:
-        # Get scenario from query param (default None)
-        scenario = request.args.get("scenario")
-        symbol = request.args.get("symbol")
-        time_range = request.args.get("time_range")
+        # Parse parameters from GET or POST
+        if request.method == "POST":
+            data = request.get_json() or {}
+            scenario = data.get("scenario")
+            symbol = data.get("symbol")
+            time_range = data.get("time_range")
+            simulate_crash = data.get("simulate_crash", False)
+        else:
+            scenario = request.args.get("scenario")
+            symbol = request.args.get("symbol")
+            time_range = request.args.get("time_range")
+            simulate_crash = request.args.get("simulate_crash", "false").lower() == "true"
         
         if scenario == "NORMAL" or scenario == "":
             scenario = None
-            
-        result = run_market_aware_analysis(scenario_id=scenario, symbol=symbol, time_range=time_range)
+        
+        # =================================================================
+        # UPGRADE 1: Load Agent Memory
+        # =================================================================
+        memory = load_agent_memory()
+        previous_run = memory.get("last_run")
+        
+        previous_posture = previous_run.get("market_posture") if previous_run else None
+        previous_risk = previous_run.get("risk_level") if previous_run else None
+        
+        # =================================================================
+        # UPGRADE 2: Crash Simulation Override
+        # =================================================================
+        crash_context = None
+        if simulate_crash:
+            crash_context = {
+                "force_volatility_state": "EXPANDING",
+                "force_news_score": 10,
+                "force_sector_confidence": 20  # Force low confidence -> DEFENSIVE posture
+            }
+            print("🚨 [CRASH SIMULATION] Volatility override engaged")
+        
+        # =================================================================
+        # Run Market-Aware Analysis
+        # =================================================================
+        result = run_market_aware_analysis(
+            scenario_id=scenario, 
+            symbol=symbol, 
+            time_range=time_range,
+            crash_override=crash_context
+        )
+        
+        # =================================================================
+        # UPGRADE 1: Compute Memory Insights
+        # =================================================================
+        current_posture = result.get("analysis", {}).get("market_posture", {}).get("market_posture", "NEUTRAL")
+        current_risk = result.get("analysis", {}).get("market_posture", {}).get("risk_level", "MEDIUM")
+        
+        # Compute trend
+        if previous_risk:
+            trend = compute_risk_trend(previous_risk, current_risk)
+        else:
+            trend = "FIRST_RUN"
+        
+        # Add memory insights to response
+        result["memory"] = {
+            "previous_posture": previous_posture,
+            "previous_risk": previous_risk,
+            "current_posture": current_posture,
+            "current_risk": current_risk,
+            "trend": trend
+        }
+        
+        # =================================================================
+        # UPGRADE 2: Add crash simulation flag to response
+        # =================================================================
+        if simulate_crash:
+            result["crash_simulation_active"] = True
+            # Inject crash explanation into warnings
+            if "analysis" in result:
+                if "warnings" not in result["analysis"]:
+                    result["analysis"]["warnings"] = []
+                result["analysis"]["warnings"].insert(0, {
+                    "type": "danger",
+                    "message": "🚨 Market Crash Simulation Active — Volatility override engaged. All aggressive allocations blocked."
+                })
+        
+        # =================================================================
+        # UPGRADE 1: Persist Current Run to Memory
+        # =================================================================
+        memory["last_run"] = {
+            "timestamp": datetime.now().isoformat(),
+            "market_posture": current_posture,
+            "risk_level": current_risk
+        }
+        save_agent_memory(memory)
+        
         return jsonify(result)
     except Exception as e:
         import traceback
