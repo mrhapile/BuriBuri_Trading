@@ -33,6 +33,9 @@ from historical_data_service import (
     get_time_ranges
 )
 
+# Security Hardening: Log Safety
+import backend.log_safety as log_safety
+
 # Data mode constants
 DATA_MODE_LIVE = "LIVE"
 DATA_MODE_HISTORICAL = "HISTORICAL"
@@ -89,7 +92,7 @@ class DataRouter:
         # Log transition if state changes
         new_mode = DATA_MODE_LIVE if is_open else DATA_MODE_HISTORICAL
         if self._data_mode and self._data_mode != new_mode:
-            print(f"🔄 [DataRouter] Market Status Transition: {self._data_mode} -> {new_mode}")
+            log_safety.safe_log(f"🔄 [DataRouter] Market Status Transition: {self._data_mode} -> {new_mode}")
         
         if is_open:
             self._data_mode = DATA_MODE_LIVE
@@ -107,9 +110,9 @@ class DataRouter:
         try:
             from broker.alpaca_adapter import AlpacaAdapter
             self._live_adapter = AlpacaAdapter()
-            print("✓ [DataRouter] Live adapter initialized (Alpaca + Polygon)")
+            log_safety.safe_log("✓ [DataRouter] Live adapter initialized (Alpaca + Polygon)")
         except Exception as e:
-            print(f"⚠️ [DataRouter] Live adapter initialization failed: {e}")
+            log_safety.safe_log_exception(e, "Live adapter initialization failed")
             # If live adapter fails when market is open, this is an ERROR condition
             # Do NOT fall back to historical data silently
             self._live_adapter = None

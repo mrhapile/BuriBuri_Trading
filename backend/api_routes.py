@@ -42,6 +42,9 @@ from historical_data_service import (
 # Import the decision engine runner
 from market_aware_runner import run_market_aware_analysis
 
+# Security Hardening: Log Safety
+import log_safety
+
 api = Blueprint("api", __name__)
 
 # =============================================================================
@@ -62,7 +65,7 @@ def ensure_memory_file():
                 json.dump(DEFAULT_MEMORY, f, indent=2)
             print(f"✅ Created agent memory file: {MEMORY_FILE}")
         except Exception as e:
-            print(f"⚠️ Could not create memory file: {e}")
+            log_safety.safe_log_exception(e, "Could not create memory file")
 
 
 def load_agent_memory() -> dict:
@@ -76,7 +79,7 @@ def load_agent_memory() -> dict:
                 return DEFAULT_MEMORY
             return data
     except Exception as e:
-        print(f"⚠️ Failed to load agent memory: {e}")
+        log_safety.safe_log_exception(e, "Failed to load agent memory")
     return DEFAULT_MEMORY
 
 
@@ -86,7 +89,7 @@ def save_agent_memory(memory: dict):
         with open(MEMORY_FILE, "w") as f:
             json.dump(memory, f, indent=2)
     except Exception as e:
-        print(f"⚠️ Failed to save agent memory: {e}")
+        log_safety.safe_log_exception(e, "Failed to save agent memory")
 
 
 def compute_risk_trend(previous_risk: str, current_risk: str) -> str:
@@ -371,10 +374,9 @@ def run_agent():
         save_agent_memory(memory)
         
         return jsonify(result)
+        return jsonify(result)
     except Exception as e:
-        import traceback
-        print(f"❌ API Execution Error: {e}")
-        traceback.print_exc()
+        log_safety.safe_log_exception(e, "API Execution Error")
         return jsonify({
             "error": str(e),
             "status": "FAILED"
