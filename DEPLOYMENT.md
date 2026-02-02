@@ -243,17 +243,50 @@ gunicorn>=21.0.0
 
 **No.** The app works without any environment variables using cached historical data.
 
-### Optional: Enable Live Market Data
-
-To use real-time data during market hours (9:30 AM - 4:00 PM ET):
-
-**Local:** Create a `.env` file:
+### Quick Setup
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+The `.env.example` file contains all available environment variables with explanations.
+
+### Complete Variable Reference
+
+| Variable | Required | Default | Description |
+|:---------|:---------|:--------|:------------|
+| `ALPACA_API_KEY` | No | — | Alpaca paper trading API key |
+| `ALPACA_SECRET_KEY` | No | — | Alpaca paper trading secret |
+| `ALPACA_BASE_URL` | No | `https://paper-api.alpaca.markets` | Alpaca API URL (paper only) |
+| `POLYGON_API_KEY` | No | — | Polygon.io API key for sector data |
+| `PORT` | No | `10000` | Backend server port |
+| `HOST` | No | `0.0.0.0` | Backend server host |
+
+**Testing/Validation Variables:**
+
+| Variable | Required | Default | Description |
+|:---------|:---------|:--------|:------------|
+| `HISTORICAL_VALIDATION` | No | `false` | Enable historical validation mode |
+| `VAL_SYMBOL` | No | `SPY` | Symbol for validation mode |
+| `VAL_RANGE` | No | `6M` | Time range for validation mode |
+
+### Data Mode Behavior
+
+The system automatically selects the data source:
+
+| Condition | Data Mode | What Happens |
+|:----------|:----------|:-------------|
+| Market OPEN + Alpaca credentials | **LIVE** | Real-time data from Alpaca |
+| Market OPEN + No credentials | **LIVE** | Attempts live, may fail gracefully |
+| Market CLOSED | **HISTORICAL** | Uses cached data (SPY, QQQ, IWM) |
+| No credentials anytime | **HISTORICAL** | Uses cached data |
+
+### Setting Up Alpaca (Optional)
+
+1. Create a free account at [alpaca.markets](https://alpaca.markets)
+2. Go to **Paper Trading** → **API Keys**
+3. Generate a new API key
+4. Add to `.env`:
 
 ```ini
 ALPACA_API_KEY=your_paper_api_key
@@ -261,9 +294,23 @@ ALPACA_SECRET_KEY=your_paper_secret
 ALPACA_BASE_URL=https://paper-api.alpaca.markets
 ```
 
-**Render:** Add these in Dashboard → Environment tab.
+### Setting Up Polygon (Optional)
 
-> 🔒 Get free paper trading keys at [alpaca.markets](https://alpaca.markets)
+Polygon provides additional market data when Alpaca data is restricted:
+
+1. Create a free account at [polygon.io](https://polygon.io)
+2. Get your API key from the dashboard
+3. Add to `.env`:
+
+```ini
+POLYGON_API_KEY=your_polygon_key
+```
+
+### On Render
+
+Add environment variables in: **Dashboard → Your Service → Environment**
+
+Only add the ones you need — the system works without any of them.
 
 ---
 
