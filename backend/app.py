@@ -11,11 +11,21 @@ DEPLOYMENT:
 """
 
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
+from werkzeug.exceptions import RequestEntityTooLarge
 from api_routes import api
 
 app = Flask(__name__)
+
+# Security Hardening: Enforce 2MB request size limit to prevent DoS
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2 MB
+
+# Security Hardening: Graceful handling of oversized payloads
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_size_error(e):
+    return jsonify({"error": "Request payload too large"}), 413
+
 CORS(app, origins="*")  # Allow all origins for deployment
 app.register_blueprint(api)
 
