@@ -42,6 +42,9 @@ from historical_data_service import (
 # Import the decision engine runner
 from market_aware_runner import run_market_aware_analysis
 
+# Security Hardening: Rate Limiting
+from rate_limit import limiter, get_run_limit
+
 api = Blueprint("api", __name__)
 
 # =============================================================================
@@ -260,6 +263,7 @@ def time_ranges():
 # =============================================================================
 
 @api.route("/run", methods=["GET", "POST"])
+@limiter.limit(get_run_limit)
 def run_agent():
     """
     Executes Phase 2 → Phase 4 pipeline.

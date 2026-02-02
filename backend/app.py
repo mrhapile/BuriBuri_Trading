@@ -17,6 +17,13 @@ from api_routes import api
 
 app = Flask(__name__)
 CORS(app, origins="*")  # Allow all origins for deployment
+
+# Security Hardening: API Rate Limiting
+from rate_limit import limiter, get_global_limit
+limiter.init_app(app)
+# Apply global default limit
+limiter._default_limits = [get_global_limit()]
+
 app.register_blueprint(api)
 
 if __name__ == "__main__":
