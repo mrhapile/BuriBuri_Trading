@@ -312,6 +312,16 @@ Add environment variables in: **Dashboard → Your Service → Environment**
 
 Only add the ones you need — the system works without any of them.
 
+### Notes on Other Variables
+
+You may see references to these in discussions or issues — they are **not** environment variables:
+
+| Name | Actual Usage |
+|:-----|:-------------|
+| `DEMO_MODE` | Internal Python variable in tests only |
+| `DEMO_PROFILE` | Internal Python variable in tests only |
+| `ALLOWED_ORIGINS` | Not used — CORS allows all origins (`*`) |
+
 ---
 
 ## API Reference
