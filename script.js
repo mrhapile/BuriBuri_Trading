@@ -14,23 +14,21 @@
 // CONFIGURATION
 // =============================================================================
 
-// BACKEND_URL: Set for production deployment
-// This MUST be declared before getApiBase() is called
-const BACKEND_URL = "https://buriburi-agent-backend.onrender.com";
+// SECURITY HARDENING: Backend URL injected via build-time environment variable
+const BACKEND_URL = import.meta.env.VITE_API_URL;
 
 /**
- * Detect API base URL:
- * 1. Check for BACKEND_URL constant (set above for production)
- * 2. Fallback to localhost for development
+ * Validates critical environment configuration.
+ * Fails loudly if VITE_API_URL is missing to prevent silent failures.
  */
 function getApiBase() {
-    // Use the BACKEND_URL constant if defined and not empty
-    if (typeof BACKEND_URL !== 'undefined' && BACKEND_URL && BACKEND_URL.length > 0) {
-        return BACKEND_URL;
+    if (!BACKEND_URL) {
+        console.error("❌ CRITICAL CONFIG ERROR: VITE_API_URL is missing.");
+        console.error("Please create a .env file with VITE_API_URL defined.");
+        alert("System Configuration Error: API URL missing. Check console for details.");
+        throw new Error("VITE_API_URL environment variable is required.");
     }
-    
-    // Development: use localhost with correct port
-    return 'http://127.0.0.1:10000';
+    return BACKEND_URL;
 }
 
 const CONFIG = {

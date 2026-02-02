@@ -11,9 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 
-  <!-- DEPLOYMENT: Set backend URL for production -->
-  <!-- Uncomment and set your Render backend URL below -->
-  <!-- <script>const BACKEND_URL = 'https://your-render-app.onrender.com';</script> -->
+  <!-- DEPLOYMENT: Backend URL is loaded from environment variables (VITE_API_URL) -->
 </head>
 
 <body>
@@ -245,7 +243,7 @@
     <p class="copyright">© 2026 BuriBuri Trading Team</p>
   </footer>
 
-  <script src="script.js"></script>
+  <script type="module" src="/script.js"></script>
 </body>
 
 </html>
