@@ -357,16 +357,29 @@ python3 tests/test_system.py
 
 ## 🔑 Environment Variables
 
-Create a `.env` file (see `.env.example`):
+All environment variables are **optional**. The system works out of the box with cached historical data.
 
-```ini
-# Alpaca Paper Trading (Optional - for live mode)
-ALPACA_API_KEY=your_paper_api_key
-ALPACA_SECRET_KEY=your_paper_secret
-ALPACA_BASE_URL=https://paper-api.alpaca.markets
+Copy the example file to get started:
+
+```bash
+cp .env.example .env
 ```
 
-**Note:** Alpaca credentials are optional. Without them, the system operates in HISTORICAL mode only.
+### Available Variables
+
+| Variable | Purpose |
+|:---------|:--------|
+| `ALPACA_API_KEY` | Paper trading API key for live data |
+| `ALPACA_SECRET_KEY` | Paper trading secret key |
+| `ALPACA_BASE_URL` | API URL (defaults to paper trading) |
+| `POLYGON_API_KEY` | Polygon.io key for sector data |
+
+### Data Mode Behavior
+
+- **With Alpaca credentials + Market OPEN** → Uses live data
+- **Without credentials or Market CLOSED** → Uses cached historical data
+
+> 📖 See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for complete setup instructions.
 
 ---
 
