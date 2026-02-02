@@ -16,7 +16,35 @@ from flask_cors import CORS
 from api_routes import api
 
 app = Flask(__name__)
-CORS(app, origins="*")  # Allow all origins for deployment
+
+# Security Hardening: Environment-based CORS Configuration
+env = os.environ.get("ENV", "development")
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
+
+if env == "production":
+    if not allowed_origins_env:
+        # Fail safe: Do NOT allow * in production if undefined
+        print("❌ CRITICAL SECURITY ERROR: ALLOWED_ORIGINS not set in production.")
+        print("   Auto-shutdown to prevent exposure.")
+        exit(1)
+    
+    # Parse list
+    allowed_origins = [
+        o.strip() for o in allowed_origins_env.split(",") if o.strip()
+    ]
+    
+    CORS(app, origins=allowed_origins, supports_credentials=True)
+    print(f"🔒 CORS Restriction: Allowed Origins -> {allowed_origins}")
+
+else:
+    # Development: Allow * for convenience if not specified
+    if allowed_origins_env:
+        allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+        CORS(app, origins=allowed_origins, supports_credentials=True)
+    else:
+        CORS(app, origins="*")
+        print("⚠️  CORS Warning: Allowing '*' for development convenience.")
+
 app.register_blueprint(api)
 
 if __name__ == "__main__":
