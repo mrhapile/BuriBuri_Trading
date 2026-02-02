@@ -61,6 +61,16 @@ git checkout main
 git merge upstream/main
 ```
 
+### Step 5: Create a Branch for Your Work
+
+**Always create a new branch before making changes:**
+
+```bash
+git checkout -b feature/your-feature-name
+```
+
+See [Branch Naming Conventions](#branch-naming-conventions) for naming rules.
+
 ---
 
 ## Branch Naming Conventions
@@ -294,6 +304,26 @@ Each Python module should have:
 3. ✅ Your branch is up-to-date with `main`
 4. ✅ Commits are small and focused
 5. ✅ Code follows the style guide
+
+### Making Commits
+
+Stage and commit your changes with clear messages:
+
+```bash
+# Stage specific files
+git add path/to/file.py
+
+# Or stage all changes
+git add .
+
+# Commit with a descriptive message
+git commit -m "Add sector concentration warning to dashboard"
+```
+
+**Good commit messages:**
+- `Add ATR calculation for volatility metrics`
+- `Fix division by zero in confidence score`
+- `Update README with API examples`
 
 ### Step 1: Push Your Branch
 
