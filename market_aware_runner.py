@@ -41,6 +41,9 @@ from data_router import (
 # Scenario support (for testing only)
 from scenarios import get_scenario
 
+# Security Hardening: Log Safety
+import backend.log_safety as log_safety
+
 
 def run_market_aware_analysis(
     scenario_id: Optional[str] = None,
@@ -86,14 +89,14 @@ def run_market_aware_analysis(
             router.set_symbol(symbol)
             thought_log.append(f"🎯 Symbol set to {symbol}")
         except ValueError as e:
-            print(f"⚠️ Symbol override ignored: {e}")
+            log_safety.safe_log(f"⚠️ Symbol override ignored: {e}", level="WARNING")
     
     if time_range:
         try:
             router.set_time_range(time_range)
             thought_log.append(f"📅 Time range set to {time_range}")
         except ValueError as e:
-            print(f"⚠️ Time range override ignored: {e}")
+            log_safety.safe_log(f"⚠️ Time range override ignored: {e}", level="WARNING")
     
     # Get routing configuration
     routing_config = router.get_routing_config()
